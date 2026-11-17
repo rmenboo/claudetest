@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>忘年会 抽選スロット</title>
+<style>
+:root{
+  --gold:#ffd54a; --gold2:#ff9f1c; --red:#e8265a; --ink:#2a0a3a;
+  --bg1:#12002b; --bg2:#4a0d52;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:"Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif;
+  color:#fff; overflow:hidden;
+  background:radial-gradient(ellipse at 50% 30%,var(--bg2),var(--bg1) 70%);
+}
+/* きらめく背景 */
+.bg{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.7;
+  background-image:
+    radial-gradient(2px 2px at 20% 30%,#fff,transparent),
+    radial-gradient(2px 2px at 70% 20%,#ffe9a0,transparent),
+    radial-gradient(3px 3px at 40% 80%,#fff,transparent),
+    radial-gradient(2px 2px at 85% 65%,#ffd0e0,transparent),
+    radial-gradient(2px 2px at 10% 70%,#fff,transparent),
+    radial-gradient(3px 3px at 60% 50%,#ffe9a0,transparent);
+  background-size:300px 300px;
+  animation:drift 24s linear infinite;
+}
+@keyframes drift{to{background-position:300px 600px}}
+
+#bar{
+  position:relative;z-index:5;display:flex;flex-wrap:wrap;gap:.6rem 1rem;align-items:center;
+  padding:.6rem 1rem;background:rgba(0,0,0,.45);backdrop-filter:blur(4px);
+  border-bottom:1px solid rgba(255,255,255,.15);font-size:14px;
+}
+#bar h1{font-size:18px;color:var(--gold);margin-right:auto;white-space:nowrap}
+#bar label{display:flex;align-items:center;gap:.4rem;white-space:nowrap}
+#bar input[type=number]{width:5.5em}
+#bar input[type=text]{width:11em}
+#bar input{padding:.35rem .5rem;border-radius:6px;border:1px solid #888;background:#1d0b30;color:#fff;font-size:14px}
+#bar button{padding:.4rem .8rem;border-radius:6px;border:1px solid rgba(255,255,255,.3);
+  background:#3b1f5c;color:#fff;cursor:pointer;font-size:14px}
+#bar button:hover{background:#56308a}
+body.hideBar #bar{display:none}
+body.hideBar #showBar{display:block}
+#showBar{display:none;position:fixed;top:6px;right:8px;z-index:6;opacity:.25;font-size:12px;
+  background:none;border:none;color:#fff;cursor:pointer}
+#showBar:hover{opacity:1}
+
+main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap:1.5vw;
+  height:calc(100% - var(--barh,56px));padding:1vh 1.5vw}
+.stage{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2vh;min-width:0}
+.prize{font-size:min(5vh,3.2vw);font-weight:900;color:var(--gold);letter-spacing:.1em;
+  text-shadow:0 0 18px rgba(255,213,74,.7);min-height:1.2em;text-align:center}
+
+.machine{
+  --n:2; position:relative;padding:min(2.2vh,1.4vw);border-radius:2.5vmin;
+  background:linear-gradient(145deg,#ffe58a,#d9902a 45%,#fff0a8 60%,#c07a14);
+  box-shadow:0 0 0 .6vmin #7a4a0a,0 1.5vh 4vh rgba(0,0,0,.6),0 0 6vh rgba(255,200,60,.35);
+}
+.machine .lights::before,.machine .lights::after{
+  content:"";position:absolute;inset:.5vmin;border-radius:2vmin;pointer-events:none;
+  border:.9vmin dotted #fff;
+}
+.machine .lights::before{animation:blinkA .7s steps(1) infinite;border-color:#fff6a8}
+.machine .lights::after{animation:blinkA .7s steps(1) infinite reverse;border-color:#ff5a7a}
+@keyframes blinkA{0%{opacity:1}50%{opacity:0}}
+.machine.spinning .lights::before,.machine.spinning .lights::after{animation-duration:.18s}
+.machine.win{animation:shake .5s 2, glow 1s ease-in-out infinite alternate}
+@keyframes shake{0%,100%{transform:translate(0)}20%{transform:translate(-8px,4px) rotate(-.4deg)}
+  40%{transform:translate(8px,-4px) rotate(.4deg)}60%{transform:translate(-6px,-2px)}80%{transform:translate(6px,2px)}}
+@keyframes glow{from{filter:brightness(1)}to{filter:brightness(1.25) saturate(1.3)}}
+
+.reels{position:relative;display:flex;gap:1.2vmin;padding:1.2vmin;border-radius:1.6vmin;background:#3a1200;
+  box-shadow:inset 0 0 2vmin #000}
+.reel{
+  --fs:min(calc(54vw / (var(--n) * .78)),34vh);
+  font-size:var(--fs);width:.78em;height:1.15em;overflow:hidden;position:relative;border-radius:1vmin;
+  background:linear-gradient(#cdbfa6,#fffaf0 18%,#fffaf0 82%,#cdbfa6);
+}
+.reel::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(rgba(0,0,0,.55),transparent 22%,transparent 78%,rgba(0,0,0,.55));}
+.strip{will-change:transform}
+.cell{height:1.15em;line-height:1.15em;text-align:center;font-weight:900;color:#b3123a;
+  font-family:"Arial Black","Impact","Hiragino Sans",sans-serif;font-variant-numeric:tabular-nums}
+.machine.idle .reel{opacity:.85}
+.machine.win .reel{background:linear-gradient(#e6c76a,#fff8d0 18%,#fff8d0 82%,#e6c76a)}
+
+.caption{font-size:min(4.4vh,2.6vw);font-weight:700;min-height:1.4em;text-align:center;
+  text-shadow:0 2px 8px rgba(0,0,0,.6)}
+.caption.suspense{color:#ff8fab;animation:pulse .5s ease-in-out infinite alternate}
+.caption.win{font-size:min(8vh,5vw);color:var(--gold);font-weight:900;
+  text-shadow:0 0 20px #ff9f1c,0 0 40px #e8265a;animation:pop .6s cubic-bezier(.2,2,.4,1)}
+@keyframes pulse{from{transform:scale(1)}to{transform:scale(1.12)}}
+@keyframes pop{from{transform:scale(.2);opacity:0}to{transform:scale(1);opacity:1}}
+
+.draw{
+  font-size:min(5vh,3vw);font-weight:900;letter-spacing:.15em;padding:1.4vh 4vw;border-radius:999px;
+  border:none;cursor:pointer;color:#fff;
+  background:linear-gradient(#ff5a7a,#c4123f);
+  box-shadow:0 .8vh 0 #7d0a28,0 1.5vh 3vh rgba(0,0,0,.5);
+  transition:transform .08s,box-shadow .08s;
+}
+.draw:hover:not(:disabled){filter:brightness(1.12)}
+.draw:active:not(:disabled){transform:translateY(.6vh);box-shadow:0 .2vh 0 #7d0a28}
+.draw:disabled{filter:grayscale(.8) brightness(.7);cursor:default}
+.draw.ready{animation:beat 1.1s ease-in-out infinite}
+@keyframes beat{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.remain{font-size:min(2.6vh,1.6vw);opacity:.85}
+.hint{font-size:min(2vh,1.2vw);opacity:.5}
+
+.history{display:flex;flex-direction:column;min-height:0;background:rgba(0,0,0,.35);
+  border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:1vh .8vw}
+.history h2{font-size:min(2.6vh,1.5vw);color:var(--gold);margin-bottom:.8vh;text-align:center}
+#hist{list-style:none;overflow:auto;flex:1;display:flex;flex-direction:column;gap:.6vh}
+#hist li{display:flex;align-items:center;gap:.6em;padding:.5vh .6vw;border-radius:8px;cursor:pointer;
+  background:rgba(255,255,255,.08);font-size:min(3vh,1.8vw);animation:slide .4s ease-out}
+#hist li:first-child{background:linear-gradient(90deg,rgba(255,213,74,.35),rgba(255,255,255,.08))}
+#hist .num{font-weight:900;color:var(--gold);font-variant-numeric:tabular-nums;min-width:2.4em}
+#hist .lbl{font-size:.7em;opacity:.8;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#hist .mark{display:none;font-size:.6em;background:#777;border-radius:4px;padding:0 .4em}
+#hist li.absent .num{text-decoration:line-through;color:#999}
+#hist li.absent .mark{display:inline}
+@keyframes slide{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
+.history .note{font-size:min(1.8vh,1vw);opacity:.5;margin-top:.6vh;text-align:center}
+
+#fx{position:fixed;inset:0;pointer-events:none;z-index:20;width:100%;height:100%}
+#flash{position:fixed;inset:0;pointer-events:none;z-index:19;background:#fff;opacity:0}
+#flash.go{animation:flash .9s ease-out}
+@keyframes flash{0%{opacity:.95}100%{opacity:0}}
+
+@media (max-width:800px){
+  main{grid-template-columns:1fr;grid-template-rows:1fr 20vh}
+  .history{padding:.5rem}
+  #hist li{font-size:16px}
+}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+
+<header id="bar">
+  <h1>🎊 忘年会 抽選スロット</h1>
+  <label>クジ番号 <input id="inStart" type="number" min="0" max="9999" value="1"> 〜 <input id="inEnd" type="number" min="1" max="9999" value="30"></label>
+  <label>賞の名前 <input id="inLabel" type="text" placeholder="例：豪華景品"></label>
+  <button id="btnApply" title="番号の範囲を反映（抽選履歴はリセット）">設定を反映</button>
+  <button id="btnSound">🔊 音ON</button>
+  <button id="btnFull">⛶ 全画面</button>
+  <button id="btnHide" title="Hキーでも切替">設定を隠す</button>
+  <button id="btnReset">リセット</button>
+</header>
+<button id="showBar">⚙ 設定</button>
+
+<main>
+  <section class="stage">
+    <div class="prize" id="prize"></div>
+    <div class="machine idle" id="machine">
+      <div class="lights"></div>
+      <div class="reels" id="reels"></div>
+    </div>
+    <div class="caption" id="caption">ボタンを押して抽選スタート！</div>
+    <button class="draw ready" id="drawBtn">抽選スタート！</button>
+    <div class="remain" id="remain"></div>
+    <div class="hint">Space / Enter：抽選　F：全画面　H：設定の表示切替　M：音</div>
+  </section>
+  <aside class="history">
+    <h2>🏆 当選番号</h2>
+    <ul id="hist"></ul>
+    <div class="note">番号をクリックで「欠席」切替<br>（欠席でも再抽選には戻りません）</div>
+  </aside>
+</main>
+
+<canvas id="fx"></canvas>
+<div id="flash"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const STORE = 'nenkai-lottery-v1';
+const SPIN_SPEED = 26;            // リールの回転速度（桁/秒）
+const SPIN_MS = 1800;             // 全リール回転のみの時間
+const STAGGER_MS = 950;           // 左から順に止める間隔
+const LAST_EXTRA_MS = 1500;       // 最後の桁だけ溜める時間
+
+/* ============ 状態 ============ */
+let S = { start:1, end:30, label:'', drawn:[] };   // drawn: [{n,label,absent}]
+let width = 2, reels = [], spinning = false, soundOn = true;
+
+function load(){
+  try{ const o = JSON.parse(localStorage.getItem(STORE)); if(o && o.drawn) S = Object.assign(S,o); }catch(e){}
+}
+function save(){ try{ localStorage.setItem(STORE, JSON.stringify(S)); }catch(e){} }
+const pad = n => String(n).padStart(width,'0');
+const pool = () => {
+  const used = new Set(S.drawn.map(d=>d.n)), p = [];
+  for(let i=S.start;i<=S.end;i++) if(!used.has(i)) p.push(i);
+  return p;
+};
+function rnd(max){           // 0..max-1 の一様乱数（crypto使用）
+  const a = new Uint32Array(1), lim = Math.floor(4294967296/max)*max;
+  do{ crypto.getRandomValues(a); }while(a[0]>=lim);
+  return a[0]%max;
+}
+
+/* ============ サウンド（外部ファイル不要・WebAudio） ============ */
+const Snd = {
+  ctx:null, master:null, nbuf:null,
+  init(){
+    if(!this.ctx){
+      const AC = window.AudioContext||window.webkitAudioContext; if(!AC) return false;
+      this.ctx = new AC(); this.master = this.ctx.createGain(); this.master.gain.value = .8;
+      this.master.connect(this.ctx.destination);
+      const len = this.ctx.sampleRate*2, b = this.ctx.createBuffer(1,len,this.ctx.sampleRate), d = b.getChannelData(0);
+      for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+      this.nbuf = b;
+    }
+    if(this.ctx.state==='suspended') this.ctx.resume();
+    return true;
+  },
+  ok(){ return soundOn && this.ctx; },
+  tone(f,t,dur,type='square',vol=.15,slide){
+    const c=this.ctx,o=c.createOscillator(),g=c.createGain();
+    o.type=type; o.frequency.setValueAtTime(f,t);
+    if(slide) o.frequency.exponentialRampToValueAtTime(slide,t+dur);
+    g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t+dur+.02);
+  },
+  noise(t,dur,vol,type,freq,q=1,swell=false){
+    const c=this.ctx,s=c.createBufferSource(),f=c.createBiquadFilter(),g=c.createGain();
+    s.buffer=this.nbuf; f.type=type; f.frequency.value=freq; f.Q.value=q;
+    if(swell){ g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+dur*.4); }
+    else g.gain.setValueAtTime(vol,t);
+    g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+    s.connect(f); f.connect(g); g.connect(this.master); s.start(t,Math.random()); s.stop(t+dur+.02);
+  },
+  tick(){ if(!this.ok())return; this.tone(1400,this.ctx.currentTime,.04,'square',.07); },
+  roll(vol){ if(!this.ok())return; this.noise(this.ctx.currentTime,.05,vol,'bandpass',1700,.8); },
+  start(){ if(!this.ok())return; const t=this.ctx.currentTime;
+    this.tone(180,t,.5,'sawtooth',.12,900); this.noise(t,.4,.12,'highpass',3000); },
+  thump(){ if(!this.ok())return; const t=this.ctx.currentTime;
+    this.tone(170,t,.28,'sine',.6,45); this.noise(t,.06,.2,'lowpass',1200); },
+  suspense(){ if(!this.ok())return; const t=this.ctx.currentTime;   // ドン…ドン… 心臓音
+    this.tone(70,t,.18,'sine',.7,40); this.tone(70,t+.16,.18,'sine',.5,40); },
+  fanfare(){
+    if(!this.ok())return; const t=this.ctx.currentTime, C=this.ctx;
+    const n=[523.25,659.25,783.99,1046.5], times=[0,.13,.26,.42];
+    n.forEach((f,i)=>{ this.tone(f,t+times[i],i==3?1.1:.2,'sawtooth',.13);
+                       this.tone(f*2,t+times[i],i==3?1.1:.2,'square',.05); });
+    [523.25,659.25,783.99,1046.5,1318.5].forEach(f=>this.tone(f,t+.6,1.4,'sawtooth',.07));
+    this.noise(t+.42,1.6,.35,'highpass',5000);                     // シンバル
+    this.noise(t+.3,2.2,.28,'bandpass',900,.5,true);               // 歓声っぽい
+    this.noise(t+.5,.12,.5,'bandpass',2500,.6);
+  }
+};
+
+/* ============ リール ============ */
+class Reel{
+  constructor(el){
+    this.el=el; this.strip=document.createElement('div'); this.strip.className='strip';
+    for(let k=0;k<20;k++){ const c=document.createElement('div'); c.className='cell'; c.textContent=k%10; this.strip.appendChild(c); }
+    el.appendChild(this.strip); this.pos=0; this.mode='idle'; this.lastFloor=0; this.render(0);
+  }
+  set(d){ this.pos=d; this.mode='idle'; this.render(0); }
+  spin(){ this.mode='spin'; }
+  stop(d,dur,cb){
+    const start=this.pos, dist=Math.ceil(SPIN_SPEED*dur/3), raw=start+dist;
+    this.start=start; this.end=Math.ceil((raw-d)/10)*10+d; this.dur=dur; this.cb=cb;
+    this.t0=performance.now(); this.mode='stop';
+  }
+  update(now,dt){
+    let blur=0;
+    if(this.mode==='spin'){ this.pos+=SPIN_SPEED*dt; if(this.pos>1000)this.pos-=1000; blur=3; }
+    else if(this.mode==='stop'){
+      const t=Math.min(1,(now-this.t0)/this.dur), inv=1-t;
+      this.pos=this.start+(this.end-this.start)*(1-inv*inv*inv);
+      blur=Math.min(3,3*(this.end-this.start)/this.dur*inv*inv/SPIN_SPEED*3);
+      const f=Math.floor(this.pos); if(f!==this.lastFloor){ this.lastFloor=f; if(t<1) Snd.tick(); }
+      if(t>=1){ this.pos=this.end%10; this.mode='done'; blur=0; this.render(0); const cb=this.cb; this.cb=null; cb&&cb(); return; }
+    } else return;
+    this.render(blur);
+  }
+  render(blur){
+    this.strip.style.transform=`translateY(${-(this.pos%10)/20*100}%)`;
+    this.strip.style.filter=blur>.3?`blur(${blur.toFixed(1)}px)`:'';
+  }
+}
+function buildReels(){
+  width = String(S.end).length;
+  const box=$('reels'); box.innerHTML=''; reels=[];
+  $('machine').style.setProperty('--n',width);
+  box.querySelectorAll('.reel').forEach(r=>r.style.setProperty('--n',width));
+  for(let i=0;i<width;i++){
+    const el=document.createElement('div'); el.className='reel'; el.style.setProperty('--n',width);
+    box.appendChild(el); reels.push(new Reel(el));
+  }
+}
+function showNumber(n){ const s=pad(n); reels.forEach((r,i)=>r.set(+s[i])); }
+
+/* ============ 紙吹雪 ============ */
+const cv=$('fx'), cx=cv.getContext('2d'); let parts=[], dpr=1;
+function resizeFx(){ dpr=Math.min(2,window.devicePixelRatio||1); cv.width=innerWidth*dpr; cv.height=innerHeight*dpr; }
+addEventListener('resize',()=>{resizeFx();fitBar();}); resizeFx();
+const COLORS=['#ffd54a','#ff5a7a','#4fd1ff','#8dff6b','#ff9f1c','#d68bff','#fff'];
+function burst(x,y,n,ang,spread,power){
+  for(let i=0;i<n;i++){
+    const a=ang+(Math.random()-.5)*spread, v=power*(.4+Math.random()*.8);
+    parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,r:3+Math.random()*6,rot:Math.random()*6,vr:(Math.random()-.5)*.4,
+      c:COLORS[rnd(COLORS.length)],life:0,max:140+Math.random()*100,round:Math.random()<.25});
+  }
+}
+function rain(n){
+  for(let i=0;i<n;i++) parts.push({x:Math.random()*innerWidth,y:-20-Math.random()*200,vx:(Math.random()-.5)*3,vy:2+Math.random()*4,
+    r:4+Math.random()*6,rot:Math.random()*6,vr:(Math.random()-.5)*.3,c:COLORS[rnd(COLORS.length)],life:0,max:260,round:Math.random()<.2});
+}
+function celebrate(){
+  const W=innerWidth,H=innerHeight;
+  burst(0,H,120,-Math.PI/3,.9,26); burst(W,H,120,-Math.PI*2/3,.9,26);
+  burst(W/2,H*.45,150,-Math.PI/2,Math.PI*2,22);
+  rain(120);
+  [400,900,1500].forEach((t,k)=>setTimeout(()=>{
+    burst(Math.random()*W,H*(.2+Math.random()*.3),90,0,Math.PI*2,18); if(k==2) rain(100);
+  },t));
+}
+function stepFx(){
+  cx.setTransform(1,0,0,1,0,0); cx.clearRect(0,0,cv.width,cv.height); cx.scale(dpr,dpr);
+  for(let i=parts.length-1;i>=0;i--){
+    const p=parts[i]; p.life++; p.vy+=.35; p.vx*=.992; p.vy*=.992; p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr;
+    if(p.life>p.max||p.y>innerHeight+30){ parts.splice(i,1); continue; }
+    cx.globalAlpha=Math.min(1,(p.max-p.life)/30); cx.fillStyle=p.c;
+    cx.save(); cx.translate(p.x,p.y); cx.rotate(p.rot);
+    if(p.round){ cx.beginPath(); cx.arc(0,0,p.r*.6,0,7); cx.fill(); } else cx.fillRect(-p.r,-p.r*.5,p.r*2,p.r);
+    cx.restore();
+  }
+}
+
+/* ============ メインループ ============ */
+let last=performance.now(), nextRoll=0, rollStart=0;
+function frame(now){
+  const dt=Math.min(.05,(now-last)/1000); last=now;
+  reels.forEach(r=>r.update(now,dt));
+  if(spinning && now>=nextRoll){                       // ドラムロール
+    const k=Math.min(1,(now-rollStart)/6000);
+    Snd.roll(.05+.2*k); nextRoll=now+75-30*k;
+  }
+  if(parts.length) stepFx(); else if(cx) cx.clearRect(0,0,cv.width,cv.height);
+  requestAnimationFrame(frame);
+}
+
+/* ============ 抽選 ============ */
+const cap=$('caption'), machine=$('machine'), btn=$('drawBtn');
+function setCaption(t,cls=''){ cap.className='caption '+cls; cap.textContent=t; }
+
+function draw(){
+  if(spinning) return;
+  const p=pool(); if(!p.length) return;
+  Snd.init();
+  const n=p[rnd(p.length)], s=pad(n);          // 先に当選番号を確定
+  spinning=true; btn.disabled=true; btn.classList.remove('ready'); btn.textContent='抽選中…';
+  machine.classList.remove('idle','win'); machine.classList.add('spinning');
+  setCaption('回転中…ドキドキ！'); $('prize').textContent=S.label;
+  Snd.start(); reels.forEach(r=>r.spin()); rollStart=performance.now(); nextRoll=0;
+
+  reels.forEach((r,i)=>{
+    const last=i===reels.length-1;
+    const at=SPIN_MS+i*STAGGER_MS+(last&&width>1?LAST_EXTRA_MS:0);
+    if(last && width>1){                              // 最後の桁の前に煽り
+      setTimeout(()=>{ setCaption('最後の1桁は…！？','suspense'); Snd.suspense();
+        setTimeout(()=>Snd.suspense(),520); setTimeout(()=>Snd.suspense(),1040); },at-1400);
+    }
+    setTimeout(()=>r.stop(+s[i], last?3400:1500, ()=>{
+      Snd.thump();
+      if(!last){ const shown=s.slice(0,i+1); setCaption(shown.padEnd(width,'?').split('').join(' ')); }
+      else reveal(n);
+    }),at);
+  });
+}
+
+function reveal(n){
+  spinning=false;
+  S.drawn.push({n,label:S.label,absent:false}); save();
+  machine.classList.remove('spinning'); machine.classList.add('win');
+  setCaption(`🎉 ${pad(n)} 番　当選！ 🎉`,'win');
+  Snd.fanfare(); celebrate();
+  const f=$('flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+  setTimeout(()=>machine.classList.remove('win'),2600);
+  renderHist(); updateBtn();
+}
+
+function updateBtn(){
+  const left=pool().length, total=S.end-S.start+1;
+  $('remain').textContent=`残り ${left} / 全 ${total} 枚　（${S.start}〜${S.end}番）`;
+  if(left>0){ btn.disabled=false; btn.classList.add('ready'); btn.textContent=S.drawn.length?'もう一回！':'抽選スタート！'; }
+  else { btn.disabled=true; btn.classList.remove('ready'); btn.textContent='全員抽選済み'; }
+}
+function renderHist(){
+  const ul=$('hist'); ul.innerHTML='';
+  for(let i=S.drawn.length-1;i>=0;i--){
+    const d=S.drawn[i], li=document.createElement('li');
+    if(d.absent) li.className='absent';
+    li.innerHTML='<span class="num"></span><span class="lbl"></span><span class="mark">欠席</span>';
+    li.querySelector('.num').textContent=pad(d.n);
+    li.querySelector('.lbl').textContent=d.label||'';
+    li.onclick=()=>{ if(spinning)return; d.absent=!d.absent; save(); renderHist(); };
+    ul.appendChild(li);
+  }
+}
+
+/* ============ 設定・操作 ============ */
+function applySettings(force){
+  const s=parseInt($('inStart').value,10), e=parseInt($('inEnd').value,10);
+  if(!(s>=0&&e>=s&&e<=9999)){ alert('番号の範囲が正しくありません。\n開始 ≦ 最後、最大9999までで入力してください。'); return false; }
+  if(S.drawn.length && !force && !confirm('番号の範囲を変更すると、これまでの抽選履歴がリセットされます。よろしいですか？')) return false;
+  S.start=s; S.end=e; S.drawn=[]; save(); init(); return true;
+}
+function init(){
+  $('inStart').value=S.start; $('inEnd').value=S.end; $('inLabel').value=S.label;
+  buildReels(); renderHist(); updateBtn();
+  const lastD=S.drawn[S.drawn.length-1];
+  if(lastD){ showNumber(lastD.n); machine.classList.remove('idle'); setCaption(`前回の当選：${pad(lastD.n)} 番`); }
+  else { showNumber(S.start); machine.classList.add('idle'); setCaption('ボタンを押して抽選スタート！'); }
+  $('prize').textContent=S.label;
+}
+function setSound(on){ soundOn=on; $('btnSound').textContent=on?'🔊 音ON':'🔇 音OFF'; }
+function toggleFull(){
+  if(document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();
+}
+function toggleBar(){ document.body.classList.toggle('hideBar'); fitBar(); }
+function fitBar(){ document.documentElement.style.setProperty('--barh',document.body.classList.contains('hideBar')?'0px':$('bar').offsetHeight+'px'); }
+
+btn.onclick=()=>{ draw(); btn.blur(); };
+$('btnApply').onclick=()=>applySettings(false);
+$('inLabel').oninput=e=>{ S.label=e.target.value; save(); if(!spinning) $('prize').textContent=S.label; };
+$('btnSound').onclick=()=>setSound(!soundOn);
+$('btnFull').onclick=toggleFull;
+$('btnHide').onclick=toggleBar; $('showBar').onclick=toggleBar;
+$('btnReset').onclick=()=>{ if(spinning)return; if(confirm('抽選履歴をすべてリセットして、最初からやり直しますか？')){ S.drawn=[]; save(); init(); } };
+addEventListener('keydown',e=>{
+  if(['INPUT','TEXTAREA'].includes(e.target.tagName)) return;
+  if(e.code==='Space'||e.code==='Enter'){ e.preventDefault(); draw(); }
+  else if(e.key==='f'||e.key==='F') toggleFull();
+  else if(e.key==='h'||e.key==='H') toggleBar();
+  else if(e.key==='m'||e.key==='M') setSound(!soundOn);
+});
+
+load(); init(); fitBar(); requestAnimationFrame(frame);
+window.__lottery={draw,state:()=>S};
+})();
+</script>
+</body>
+</html>
