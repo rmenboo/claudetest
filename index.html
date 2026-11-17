@@ -223,6 +223,8 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
 .setup button.done{filter:saturate(.35) brightness(.85)}
 body.loaded .setup{display:none}
 body:not(.loaded) #drawBtn,body:not(.loaded) .remain{display:none}
+.exportMain{display:none}
+body.finished .exportMain{display:block}   /* 抽選がすべて終わったら、結果保存ボタンを表示 */
 #hist .num.name{min-width:0;font-size:.8em;flex:0 1 auto}
 /* 暗転（スポットライト）：止まる直前に周りを暗くする */
 .title,.remain,.history,.bg{transition:opacity .7s}
@@ -260,6 +262,7 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
   <button id="btnBgm">🎵 BGM ON</button>
   <button id="btnFull">⛶ 全画面</button>
   <button id="btnHide">設定を隠す</button>
+  <button id="btnExport" title="これまでの抽選結果（誰に何が当たったか）をHTMLファイルで保存します。Eキーでも保存できます">📄 結果をHTML保存</button>
   <button id="btnReset" title="抽選履歴を消して最初からやり直す（CSVはそのまま）">リセット</button>
 </header>
 <button id="showBar">⚙ 設定</button>
@@ -281,6 +284,7 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
         <button id="btnSetPrize"></button>
       </div>
       <button class="draw ready" id="drawBtn">抽選スタート！</button>
+      <div class="setup exportMain"><button id="btnExportMain">📄 抽選結果をHTMLで保存</button></div>
       <div class="remain" id="remain"></div>
     </div>
   </section>
@@ -288,7 +292,7 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
     <h2>🏆 当選者</h2>
     <ul id="hist"></ul>
     <div class="note">
-      <b>Space / Enter</b>抽選<br><b>F</b>全画面<br><b>H</b>設定の表示切替<br><b>M</b>音 ON/OFF<br><b>B</b>BGM ON/OFF<br><b>T</b>デザイン切替
+      <b>Space / Enter</b>抽選<br><b>F</b>全画面<br><b>H</b>設定の表示切替<br><b>M</b>音 ON/OFF<br><b>B</b>BGM ON/OFF<br><b>T</b>デザイン切替<br><b>E</b>結果をHTML保存
     </div>
   </aside>
 </main>
@@ -323,7 +327,7 @@ const THEMES=[
 // S：設定と履歴（localStorage に保存）
 //   people：参加者 [{name, dept}] / prizes：景品 [{name, qty, big}]
 //   fx0・fx1：演出確率（演出効果が始まる回・最後の抽選） / autoTheme：5回ごとにデザインを自動で切り替えるか
-//   drawn：当選履歴 [{n, who, dept, prize}]  n＝参加者の通し番号
+//   drawn：当選履歴 [{n, who, dept, prize, at}]  n＝参加者の通し番号 / at＝抽選した時刻
 let S = { people:[], prizes:[], fx0:55, fx1:95, bgm:true, autoTheme:true, theme:'gold', title:'令和8年度収穫祭 大抽選会', base:8, drawn:[] };
 let lastFx = new Set();                         // 直前の抽選で使った演出（同じ演出の連続を避ける）
 let FORCE = null, FORCEN = null, FORCEP = null;   // テスト用：演出・当選者・景品を固定する（通常は null）
@@ -750,7 +754,7 @@ function prizeLeft(){            // 景品ごとの残り数
 function prizeUnits(){ const u=[]; prizeLeft().forEach(x=>{ for(let i=0;i<x.left;i++) u.push(x.name); }); return u; }
 function celebrateSmall(){ const W=innerWidth,H=innerHeight; burst(W/2,H*.4,90,-Math.PI/2,Math.PI*1.6,20); rain(40); }
 const winLabel = n => `${S.people[n].name} さん`;
-function entryFor(n,prize){ const x=S.people[n]; return {n,who:x.name,dept:x.dept,prize}; }
+function entryFor(n,prize){ const x=S.people[n]; return {n,who:x.name,dept:x.dept,prize,at:Date.now()}; }   // at：抽選した時刻
 
 // 当選者のあとに景品を抽選する
 function prizeStage(n){
@@ -830,6 +834,7 @@ function updateBtn(){
   $('btnSetPeople').textContent='👥 参加者CSVを読み込む'+(S.people.length?`（${S.people.length}名 ✓）`:'');
   $('btnSetPrize').textContent='🎁 景品CSVを読み込む'+(S.prizes.length?`（${S.prizes.length}種 ✓）`:'');
   $('btnSetPeople').classList.toggle('done',S.people.length>0); $('btnSetPrize').classList.toggle('done',S.prizes.length>0);
+  document.body.classList.toggle('finished',ready&&S.drawn.length>0&&!(left>0&&pu>0));   // 抽選がすべて終わった
   if(!ready) return;
   $('remain').textContent=`残り ${left} / 全 ${S.people.length} 名　景品残り ${pu} 個`;
   if(left>0&&pu>0){ btn.disabled=false; btn.classList.add('ready'); btn.textContent=S.drawn.length?'もう一回！':'抽選スタート！'; }
@@ -845,6 +850,54 @@ function renderHist(){
     if(d.dept) li.title=d.dept;
     ul.appendChild(li);
   }
+}
+
+/* ============ 抽選結果のHTML出力 ============ */
+const esc = t => String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function buildResultHtml(){
+  const now=new Date(), fmt=d=>new Date(d).toLocaleString('ja-JP'), title=S.title||'抽選会';
+  const left=prizeLeft(), notWon=pool().map(i=>S.people[i]);
+  const byPrize=S.prizes.map(x=>({...x,winners:S.drawn.filter(d=>d.prize===x.name)}));
+  const row=(cells)=>'<tr>'+cells.map(c=>`<td>${c}</td>`).join('')+'</tr>';
+  const rows=S.drawn.map((d,i)=>row([i+1,esc(d.who),esc(d.dept),`${isBig(d.prize)?'🌾 ':''}${esc(d.prize)}`,d.at?fmt(d.at):''])).join('');
+  const prizeRows=byPrize.map(x=>row([esc(x.name)+(x.big?'（大当たり）':''),x.qty,x.winners.length,x.winners.map(w=>esc(w.who)).join('、')||'―'])).join('');
+  const unused=left.filter(x=>x.left>0).map(x=>`${esc(x.name)} ×${x.left}`);
+  return `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(title)} 抽選結果</title>
+<style>
+body{font-family:"Hiragino Sans","Yu Gothic","Meiryo",sans-serif;margin:2rem auto;max-width:900px;padding:0 1rem;color:#222;line-height:1.6}
+h1{font-size:1.6rem;margin:0 0 .2rem} h2{font-size:1.15rem;margin:2rem 0 .5rem;border-left:6px solid #c4123f;padding-left:.6rem}
+.meta{color:#666;margin:0 0 1rem}
+.summary{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0}
+.summary div{background:#f6f2ea;border-radius:8px;padding:.5rem 1rem}.summary b{font-size:1.3rem}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:.4rem .6rem;text-align:left;vertical-align:top}
+th{background:#f0ece4}tr:nth-child(even) td{background:#fafafa}
+@media print{body{margin:0;max-width:none}h2{break-after:avoid}tr{break-inside:avoid}}
+</style></head><body>
+<h1>${esc(title)}　抽選結果</h1>
+<p class="meta">出力日時：${fmt(now)}</p>
+<div class="summary">
+<div>参加者 <b>${S.people.length}</b> 名</div><div>当選者 <b>${S.drawn.length}</b> 名</div>
+<div>景品 <b>${S.prizes.reduce((a,x)=>a+x.qty,0)}</b> 個（配布 <b>${S.drawn.length}</b> 個）</div>
+</div>
+<h2>抽選結果（抽選順）</h2>
+<table><thead><tr><th>No.</th><th>氏名</th><th>所属</th><th>景品</th><th>抽選時刻</th></tr></thead><tbody>${rows||'<tr><td colspan="5">まだ抽選していません</td></tr>'}</tbody></table>
+<h2>景品別の当選者</h2>
+<table><thead><tr><th>景品</th><th>数量</th><th>当選</th><th>当選者</th></tr></thead><tbody>${prizeRows}</tbody></table>
+<h2>当選しなかった参加者（${notWon.length}名）</h2>
+<p>${notWon.length?notWon.map(x=>esc(x.name)+(x.dept?`（${esc(x.dept)}）`:'')).join('、'):'なし'}</p>
+<h2>配布されなかった景品</h2>
+<p>${unused.length?unused.join('、'):'なし'}</p>
+</body></html>`;
+}
+function exportResult(){
+  if(!S.drawn.length){ alert('まだ抽選結果がありません。'); return; }
+  const d=new Date(), z=n=>String(n).padStart(2,'0');
+  const name=`抽選結果_${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}.html`;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([buildResultHtml()],{type:'text/html;charset=utf-8'})); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),3000);
 }
 
 /* ============ 設定・操作 ============ */
@@ -947,6 +1000,7 @@ $('btnBgm').onclick=()=>setBgm(!S.bgm);
 $('btnSound').onclick=()=>setSound(!soundOn);
 $('btnFull').onclick=toggleFull;
 $('btnHide').onclick=toggleBar; $('showBar').onclick=toggleBar;
+$('btnExport').onclick=exportResult; $('btnExportMain').onclick=exportResult;
 $('btnReset').onclick=()=>{ if(spinning)return; if(confirm('抽選履歴をすべてリセットして、最初からやり直しますか？（CSVはそのまま残ります）')){ S.drawn=[]; save(); init(); } };
 // ボタン等をクリックした後にフォーカスが残ると、Space で別の操作が走ってしまうので、クリック後にフォーカスを外す
 addEventListener('click',e=>{ const t=e.target.closest('button,input[type=checkbox]'); if(t) t.blur(); });
@@ -958,6 +1012,7 @@ addEventListener('keydown',e=>{
   else if(e.key==='m'||e.key==='M') setSound(!soundOn);
   else if(e.key==='b'||e.key==='B') setBgm(!S.bgm);
   else if(e.key==='t'||e.key==='T') nextTheme();
+  else if(e.key==='e'||e.key==='E') exportResult();
 });
 
 load(); applyTheme(S.theme); setBgm(S.bgm); init();
