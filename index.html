@@ -358,13 +358,14 @@ const THEMES=[
 // S：設定と履歴（localStorage に保存）
 //   people：参加者 [{name, dept}] / prizes：景品 [{name, qty, big}]
 //   ※抽選回数＝景品の総数。景品は参加者数以下を前提にしている
+//   sound・bgm：音とBGMのON/OFF（再読み込みしても保つ）
 //   fx0・fx1：演出確率（演出効果が始まる回・最後の抽選） / autoTheme：5回ごとにデザインを自動で切り替えるか
 //   drawn：当選履歴 [{n, who, dept, prize, at}]  n＝参加者の通し番号 / at＝抽選した時刻
-let S = { people:[], prizes:[], fx0:55, fx1:95, bgm:true, autoTheme:true, theme:'gold', title:'令和8年度収穫祭 大抽選会', base:8, drawn:[] };
+let S = { people:[], prizes:[], fx0:55, fx1:95, sound:true, bgm:true, autoTheme:true, theme:'gold', title:'令和8年度収穫祭 大抽選会', base:8, drawn:[] };
 let lastFx = new Set();                         // 直前の抽選で使った演出（同じ演出の連続を避ける）
 let FORCE = null, FORCEN = null, FORCEP = null;   // テスト用：演出・当選者・景品を固定する（通常は null）
 let idleOn = false, idleTimer = null, bgmTimer = null, winTimer = null, lastGlitter = 0;
-let reels = [], spinning = false, rolling = false, soundOn = true, prizeReel = null;
+let reels = [], spinning = false, rolling = false, soundOn = true, prizeReel = null;   // soundOn：音のON/OFF（S.sound に保存した値を起動時に反映）
 
 function load(){
   try{
@@ -375,6 +376,7 @@ function load(){
   if(!Array.isArray(S.prizes)) S.prizes=[];
   S.drawn = (Array.isArray(S.drawn)?S.drawn:[]).filter(d=>d.who!==undefined);   // 旧版（数字抽選）の履歴は引き継がない
   S.autoTheme = S.autoTheme!==false;
+  S.sound = S.sound!==false;
   S.fx0 = Math.min(100,Math.max(0,Number.isFinite(+S.fx0)?+S.fx0:55));
   S.fx1 = Math.min(100,Math.max(0,Number.isFinite(+S.fx1)?+S.fx1:95));
   S.base = Math.min(30,Math.max(4,+S.base||8));
@@ -1038,7 +1040,7 @@ async function loadCsv(f,kind){
   if(kind==='people') S.people=list; else S.prizes=list;
   S.drawn=[]; save(); init();
 }
-function setSound(on){ soundOn=on; $('btnSound').textContent=on?'🔊 音ON':'🔇 音OFF'; BGM.refresh(); }
+function setSound(on){ soundOn=S.sound=on; save(); $('btnSound').textContent=on?'🔊 音ON':'🔇 音OFF'; BGM.refresh(); }
 function setBgm(on){ S.bgm=on; $('btnBgm').textContent=on?'🎵 BGM ON':'🎵 BGM OFF'; save(); BGM.refresh(); }
 function toggleFull(){
   if(document.fullscreenElement) document.exitFullscreen();
@@ -1082,7 +1084,7 @@ addEventListener('keydown',e=>{
   else if(e.key==='e'||e.key==='E') showResults(true);
 });
 
-load(); applyTheme(S.theme); setBgm(S.bgm); init();
+load(); applyTheme(S.theme); setSound(S.sound); setBgm(S.bgm); init();
 // 最初のクリック／キー操作で音声を有効化（ブラウザの仕様）し、待機BGMを開始
 const unlock=()=>{ Snd.init(); BGM.start(); removeEventListener('pointerdown',unlock); removeEventListener('keydown',unlock); };
 addEventListener('pointerdown',unlock); addEventListener('keydown',unlock); requestAnimationFrame(frame);
