@@ -196,16 +196,14 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
   border:1px solid var(--panel-border);border-radius:12px;padding:1vh .8vw}
 .history h2{font-size:min(2.6vh,1.5vw);color:var(--gold);margin-bottom:.8vh;text-align:center}
 #hist{list-style:none;overflow:auto;flex:1;display:flex;flex-direction:column;gap:.6vh}
-#hist li{display:flex;align-items:center;gap:.6em;padding:.5vh .6vw;border-radius:8px;cursor:pointer;
+#hist li{display:flex;align-items:center;gap:.6em;padding:.5vh .6vw;border-radius:8px;
   background:var(--li-bg);font-size:min(3vh,1.8vw);animation:slide .4s ease-out}
 #hist li:first-child{background:var(--li-first)}
 #hist .num{font-weight:900;color:var(--gold);font-variant-numeric:tabular-nums;min-width:2.4em}
 #hist .lbl{font-size:.7em;opacity:.8;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#hist .mark{display:none;font-size:.6em;background:#777;color:#fff;border-radius:4px;padding:0 .4em}
-#hist li.absent .num{text-decoration:line-through;color:#999}
-#hist li.absent .mark{display:inline}
 @keyframes slide{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
-.history .note{font-size:min(1.8vh,1vw);opacity:.5;margin-top:.6vh;text-align:center}
+.history .note{font-size:min(2vh,1.1vw);line-height:1.7;opacity:.65;margin-top:.8vh;padding-top:.8vh;border-top:1px solid var(--panel-border)}   /* ショートカットの説明 */
+.history .note b{display:inline-block;min-width:7.6em;font-weight:700;color:var(--gold)}
 
 /* 景品ルーレット（景品CSVを設定したときだけ表示） */
 .prizeBox{position:relative;padding:.9vh;border-radius:1.8vmin;background:var(--frame-bg);
@@ -218,7 +216,6 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
 .prizeBox.win{animation:glow 1s ease-in-out infinite alternate}
 .prizeBox.win .reel{background:var(--win-reel-bg)}
 #prizeInfo,#peopleInfo{font-size:13px;opacity:.85}
-#bar .keys{font-size:12px;opacity:.7}
 /* CSV読み込み前：案内ボタンを表示し、抽選ボタンは隠す */
 .setup{display:flex;gap:2vw;flex-wrap:wrap;justify-content:center}
 .setup button{font-size:min(3.2vh,1.9vw);font-weight:900;padding:1.3vh 2.2vw;border-radius:999px;border:none;cursor:pointer;
@@ -270,7 +267,6 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
   <button id="btnFull">⛶ 全画面</button>
   <button id="btnHide">設定を隠す</button>
   <button id="btnReset" title="抽選履歴を消して最初からやり直す（CSVはそのまま）">リセット</button>
-  <span class="keys">キー操作：Space/Enter 抽選　F 全画面　H 設定の表示切替　M 音　B BGM　T デザイン</span>
 </header>
 <button id="showBar">⚙ 設定</button>
 
@@ -297,7 +293,9 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
   <aside class="history">
     <h2>🏆 当選者</h2>
     <ul id="hist"></ul>
-    <div class="note">名前をクリックで「欠席」切替<br>（その人は再抽選に戻らず、景品は戻ります）</div>
+    <div class="note">
+      <b>Space / Enter</b>抽選<br><b>F</b>全画面<br><b>H</b>設定の表示切替<br><b>M</b>音 ON/OFF<br><b>B</b>BGM ON/OFF<br><b>T</b>デザイン切替
+    </div>
   </aside>
 </main>
 
@@ -331,7 +329,7 @@ const THEMES=[
 // S：設定と履歴（localStorage に保存）
 //   people：参加者 [{name, dept}] / prizes：景品 [{name, qty, big}]
 //   fx0・fx1：演出確率（演出効果が始まる回・最後の抽選） / autoTheme：5回ごとにデザインを自動で切り替えるか
-//   drawn：当選履歴 [{n, who, dept, prize, absent}]  n＝参加者の通し番号
+//   drawn：当選履歴 [{n, who, dept, prize}]  n＝参加者の通し番号
 let S = { people:[], prizes:[], fx0:55, fx1:95, bgm:true, autoTheme:true, theme:'gold', title:'令和8年度収穫祭 大抽選会', base:8, drawn:[] };
 let lastFx = new Set();                         // 直前の抽選で使った演出（同じ演出の連続を避ける）
 let FORCE = null, FORCEN = null, FORCEP = null;   // テスト用：演出・当選者・景品を固定する（通常は null）
@@ -751,14 +749,14 @@ function draw(){
 }
 
 /* ---- 景品 ---- */
-function prizeLeft(){            // 景品ごとの残り数（欠席にした人の景品は戻る）
-  const used={}; S.drawn.forEach(d=>{ if(d.prize&&!d.absent) used[d.prize]=(used[d.prize]||0)+1; });
+function prizeLeft(){            // 景品ごとの残り数
+  const used={}; S.drawn.forEach(d=>{ if(d.prize) used[d.prize]=(used[d.prize]||0)+1; });
   return S.prizes.map(x=>({name:x.name,left:Math.max(0,x.qty-(used[x.name]||0))}));
 }
 function prizeUnits(){ const u=[]; prizeLeft().forEach(x=>{ for(let i=0;i<x.left;i++) u.push(x.name); }); return u; }
 function celebrateSmall(){ const W=innerWidth,H=innerHeight; burst(W/2,H*.4,90,-Math.PI/2,Math.PI*1.6,20); rain(40); }
 const winLabel = n => `${S.people[n].name} さん`;
-function entryFor(n,prize){ const x=S.people[n]; return {n,who:x.name,dept:x.dept,prize,absent:false}; }
+function entryFor(n,prize){ const x=S.people[n]; return {n,who:x.name,dept:x.dept,prize}; }
 
 // 当選者のあとに景品を抽選する
 function prizeStage(n){
@@ -847,12 +845,10 @@ function renderHist(){
   const ul=$('hist'); ul.innerHTML='';
   for(let i=S.drawn.length-1;i>=0;i--){
     const d=S.drawn[i], li=document.createElement('li');
-    if(d.absent) li.className='absent';
-    li.innerHTML='<span class="num name"></span><span class="lbl"></span><span class="mark">欠席</span>';
+    li.innerHTML='<span class="num name"></span><span class="lbl"></span>';
     li.querySelector('.num').textContent=d.who;
     li.querySelector('.lbl').textContent=`${isBig(d.prize)?'🌾':'🎁'} ${d.prize}`;
     if(d.dept) li.title=d.dept;
-    li.onclick=()=>{ if(spinning)return; d.absent=!d.absent; save(); renderHist(); updateBtn(); };
     ul.appendChild(li);
   }
 }
