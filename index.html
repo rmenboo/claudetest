@@ -227,7 +227,13 @@ body.hasPrize .reel:not(.prizeReel){--fs:min(calc(54vw / (var(--n) * .78)),23vh)
 body.hasPrize.hideBar .reel:not(.prizeReel){--fs:min(calc(54vw / (var(--n) * .78)),27vh)}
 body.hasPrize .title{font-size:min(6vh,4vw)}
 body.hasPrize .stage{gap:1.2vh}
-#prizeInfo{font-size:13px;opacity:.85}
+#prizeInfo,#peopleInfo{font-size:13px;opacity:.85}
+/* 参加者モード：数字リールの代わりに、名前が流れるリール1本を表示 */
+body.hasPeople .numOnly{display:none}
+body.hasPeople .caption.win{font-size:min(6.5vh,4vw)}      /* 名前は数字より長いので当選表示を少し小さく */
+.reel.nameReel{width:min(62vw,1150px);height:1.15em;border-radius:1vmin}
+.nameReel .cell{font-family:var(--font);font-variant-numeric:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 .3em}
+#hist .num.name{min-width:0;font-size:.8em;flex:0 1 auto}
 /* 暗転（スポットライト）：最後の1桁の前に周りを暗くする */
 .title,.remain,.hint,.history,.bg{transition:opacity .7s}
 body.dim .title,body.dim .remain,body.dim .hint,body.dim .history{opacity:.1}
@@ -260,14 +266,16 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
 <header id="bar">
   <h1>🎊 抽選スロット</h1>
   <label>タイトル <input id="inTitle" type="text" value="令和8年度収穫祭 大抽選会"></label>
-  <label>クジ番号 <input id="inStart" type="number" min="1" max="99" value="1"> 〜 <input id="inEnd" type="number" min="1" max="99" value="30"></label>
+  <label class="numOnly">クジ番号 <input id="inStart" type="number" min="1" max="99" value="1"> 〜 <input id="inEnd" type="number" min="1" max="99" value="30"></label>
   <label title="演出効果は、この回数目の抽選から起こり始め、最後の抽選（クジ番号の総数）に向けて少しずつ起こりやすくなります">演出効果 <input id="inFake" type="number" min="1" max="99" step="1" value="4">回目〜</label>
   <label title="演出効果の起こりやすさ。開始回での確率 → 最後の抽選での確率（0〜100%）。間は直線的に上がります。0にすると演出なし">演出確率 <input id="inFx0" type="number" min="0" max="100" step="5" value="55" style="width:4.5em">% → <input id="inFx1" type="number" min="0" max="100" step="5" value="95" style="width:4.5em">%</label>
   <label title="スタートから止まるまでの基本時間。実際は毎回ランダムで約0.5〜1.6倍になります">基本時間 <input id="inBase" type="number" min="4" max="30" step="1" value="8">秒</label>
   <label>デザイン <select id="selTheme"></select></label>
   <label title="1列目＝景品名、2列目＝数量（省略時は1個）、3列目＝区分（「大当たり」や★を書くと当選表示が変わります。空欄は通常）。設定すると、当選番号に続いて景品も抽選します">景品CSV <input id="inCsv" type="file" accept=".csv,.txt,text/csv"></label>
+  <label title="1列目＝氏名、2列目＝所属など（省略可）。設定すると、数字ではなく参加者の名前で抽選します（クジ番号の設定は使いません）">参加者CSV <input id="inPeople" type="file" accept=".csv,.txt,text/csv"></label>
+  <button id="btnPeopleClear" title="参加者の設定を解除（数字の抽選に戻ります）">参加者クリア</button><span id="peopleInfo"></span>
   <button id="btnPrizeClear" title="景品の設定を解除（番号だけの抽選に戻ります）">景品クリア</button><span id="prizeInfo"></span>
-  <button id="btnApply" title="番号の範囲を反映（抽選履歴はリセット）">設定を反映</button>
+  <button id="btnApply" class="numOnly" title="番号の範囲を反映（抽選履歴はリセット）">設定を反映</button>
   <button id="btnSound">🔊 音ON</button>
   <button id="btnBgm" title="Bキーでも切替">🎵 BGM ON</button>
   <button id="btnFull">⛶ 全画面</button>
@@ -290,9 +298,9 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
     <div class="hint">Space / Enter：抽選　F：全画面　H：設定の表示切替　M：音　B：BGM　T：デザイン切替</div>
   </section>
   <aside class="history">
-    <h2>🏆 当選番号</h2>
+    <h2 id="histTitle">🏆 当選番号</h2>
     <ul id="hist"></ul>
-    <div class="note">番号をクリックで「欠席」切替<br>（番号は再抽選に戻らず、景品は戻ります）</div>
+    <div class="note" id="histNote">番号をクリックで「欠席」切替<br>（番号は再抽選に戻らず、景品は戻ります）</div>
   </aside>
 </main>
 
@@ -322,8 +330,9 @@ const THEMES=[
   {id:'pop',    name:'⑤ ポップ（お祭り）',    confetti:['#ff3d7f','#ffb23d','#ffe93d','#4fd16b','#3db8ff','#a46bff']}
 ];
 // S：設定と履歴（localStorage に保存）
-//   fakeFrom：演出効果を始める回（画面の「演出効果 ○回目〜」） / drawn：[{n, prize?, absent}] / prizes：[{name, qty, big}]
-let S = { fx0:55, fx1:95, bgm:true, prizes:[], theme:'gold', title:'令和8年度収穫祭 大抽選会', start:1, end:30, base:8, fakeFrom:4, drawn:[] };
+//   fakeFrom：演出効果を始める回（画面の「演出効果 ○回目〜」） / prizes：[{name, qty, big}]
+//   people：参加者 [{name, dept}]（設定すると数字の代わりに参加者で抽選） / drawn：[{n, prize?, absent, who?, dept?}]  n＝番号（参加者モードでは参加者の通し番号）
+let S = { people:[], fx0:55, fx1:95, bgm:true, prizes:[], theme:'gold', title:'令和8年度収穫祭 大抽選会', start:1, end:30, base:8, fakeFrom:4, drawn:[] };
 let lastFx = new Set();                         // 直前の抽選で使った演出（同じ演出の連続を避ける）
 let FORCE = null, FORCEN = null, FORCEP = null;   // テスト用：演出・当選番号・景品を固定する（通常は null）
 let idleOn = false, idleTimer = null, bgmTimer = null, winTimer = null, lastGlitter = 0;
@@ -337,11 +346,15 @@ function load(){
 }
 function save(){ try{ localStorage.setItem(STORE, JSON.stringify(S)); }catch(e){} }
 const pad = n => String(n).padStart(width,'0');
-const pool = () => {
+const isPeople = () => S.people.length>0;                         // 参加者モードか
+const totalCount = () => isPeople()?S.people.length:S.end-S.start+1;   // 抽選できる総数
+const pool = () => {                                              // まだ当たっていない番号（参加者モードでは参加者の通し番号）
   const used = new Set(S.drawn.map(d=>d.n)), p = [];
-  for(let i=S.start;i<=S.end;i++) if(!used.has(i)) p.push(i);
+  const lo = isPeople()?0:S.start, hi = isPeople()?S.people.length-1:S.end;
+  for(let i=lo;i<=hi;i++) if(!used.has(i)) p.push(i);
   return p;
 };
+const winLabel = n => isPeople()?`${S.people[n].name} さん`:`${pad(n)} 番`;   // 当選表示用の呼び名
 function rnd(max){           // 0..max-1 の一様乱数（crypto使用）
   const a = new Uint32Array(1), lim = Math.floor(4294967296/max)*max;
   do{ crypto.getRandomValues(a); }while(a[0]>=lim);
@@ -559,7 +572,17 @@ class Reel{
     this.strip.style.filter=blur>.3?`blur(${blur.toFixed(1)}px)`:'';
   }
 }
+function stripFrom(names){ let B=[]; while(B.length<8) B=B.concat(shuffle(names)); return B; }   // リールに並べる文字列（8個以上になるよう繰り返す）
+// 参加者モードの名前リール（全参加者の最長の名前に合わせて文字サイズを決める）
+function setNameReel(items,speed){
+  const box=$('reels'); box.innerHTML='';
+  const L=Math.max(5,...S.people.map(x=>[...x.name].length));
+  const el=document.createElement('div'); el.className='reel nameReel';
+  el.style.fontSize=`min(${S.prizes.length?9:12}vh,${(58/L).toFixed(2)}vw)`;
+  box.appendChild(el); reels=[new Reel(el,items,speed||9)]; return reels[0];
+}
 function buildReels(){
+  if(isPeople()){ setNameReel(stripFrom(S.people.map(x=>x.name))); return; }
   width = 2;                       // 2桁固定
   const box=$('reels'); box.innerHTML=''; reels=[];
   $('machine').style.setProperty('--n',width);
@@ -638,7 +661,7 @@ function setCaption(t,cls=''){ cap.className='caption '+cls; cap.textContent=t; 
 const fxProb=prog=>(S.fx0+(S.fx1-S.fx0)*prog)/100;
 // 演出の進行度 0〜1：演出効果の開始回（S.fakeFrom）=0、最後の抽選（クジ番号の総数。景品設定時は景品数と小さい方）=1
 function drawProgress(){
-  let total=S.end-S.start+1;
+  let total=totalCount();
   if(S.prizes.length) total=Math.min(total,S.prizes.reduce((a,x)=>a+x.qty,0));
   const idx=S.drawn.length+1;
   return total<=S.fakeFrom?1:Math.min(1,Math.max(0,(idx-S.fakeFrom)/(total-S.fakeFrom)));
@@ -648,7 +671,17 @@ function draw(){
   const p=pool(); if(!p.length) return;
   if(S.prizes.length&&!prizeUnits().length) return;        // 景品が残っていない
   Snd.init(); BGM.start(); stopIdle(); clearTimeout(bgmTimer); clearTimeout(winTimer); BGM.set('spin');
-  const n=(FORCEN!=null&&p.includes(FORCEN))?FORCEN:p[rnd(p.length)], s=pad(n);   // 先に当選番号を確定
+  const n=(FORCEN!=null&&p.includes(FORCEN))?FORCEN:p[rnd(p.length)];   // 先に当選番号（参加者）を確定
+  const people=isPeople(), s=people?'':pad(n);
+  // tgt：各リールが止まる位置（数字モード＝各桁の数字／参加者モード＝名前リール上の位置）
+  let tgt, posOf=null, fakeCands=[];
+  if(people){
+    const strip=stripFrom(p.map(i=>S.people[i].name));
+    posOf=name=>{ const c=strip.map((x,i)=>x===name?i:-1).filter(i=>i>=0); return c[rnd(c.length)]; };
+    tgt=[posOf(S.people[n].name)];
+    fakeCands=p.filter(i=>S.people[i].name!==S.people[n].name);   // フェイク当選に使える別の人
+    setNameReel(strip);
+  } else tgt=s.split('').map(Number);
   spinning=true; rolling=true; btn.disabled=true; btn.classList.remove('ready'); btn.textContent='抽選中…';
   machine.classList.remove('idle','win','buzz'); machine.classList.add('spinning');
   document.body.classList.remove('dim');
@@ -667,6 +700,15 @@ function draw(){
   const roll=()=>{
     const N={kind:'normal',v:NORM};
     if(!active) return {plan:N,dim:false};
+    if(people){                                                              // 参加者モード：リールは1本（同時停止・1桁目ずらしは使わない）
+      const canFake=fakeCands.length>0;
+      if(FORCE==='fakewin'&&canFake) return {plan:{kind:'fakewin',v:NORM},dim:false};   // テスト用
+      if(FORCE==='dim') return {plan:N,dim:true};
+      if(FORCE) return {plan:{kind:'reel',v:[['together','nudge','fakewin'].includes(FORCE)?'normal':FORCE]},dim:false};
+      let plan=N;
+      if(rnd(1000)<fxProb(prog)*1000) plan=(canFake&&prog>=.35&&rnd(100)<25)?{kind:'fakewin',v:NORM}:{kind:'reel',v:[rv()]};
+      return {plan,dim:rnd(1000)<fxProb(prog)*500};
+    }
     if(FORCE){                                                                // テスト用
       if(FORCE==='nudge') return {plan:{kind:'nudge',v:['park','normal']},dim:false};
       if(['together','fakewin'].includes(FORCE)) return {plan:{kind:FORCE,v:NORM},dim:false};
@@ -700,11 +742,16 @@ function draw(){
   lastFx=fxOf(R);
   const plan=R.plan, useDim=R.dim;
 
-  // フェイク当選用の「ウソの番号」
-  let fk=n;
+  // フェイク当選用の「ウソの当選者」（fakeTgt：止まる位置／fakeText：表示）
+  let fakeTgt=null, fakeText='';
   if(plan.kind==='fakewin'){
-    const lo=S.end>S.start?S.start:1, hi=S.end>S.start?S.end:99;
-    do{ fk=lo+rnd(hi-lo+1); }while(fk===n);
+    if(people){
+      const f=fakeCands[rnd(fakeCands.length)]; fakeTgt=[posOf(S.people[f].name)]; fakeText=`${S.people[f].name} さん`;
+    }else{
+      const lo=S.end>S.start?S.start:1, hi=S.end>S.start?S.end:99; let fk;
+      do{ fk=lo+rnd(hi-lo+1); }while(fk===n);
+      fakeTgt=pad(fk).split('').map(Number); fakeText=`${pad(fk)} 番`;
+    }
   }
   let fakePhase=plan.kind==='fakewin', done=0;
 
@@ -725,25 +772,29 @@ function draw(){
   // フェイク当選：いったん偽の番号で当選っぽく止める→「ブッブー」→再回転
   const fakeFlow=()=>{
     document.body.classList.remove('dim'); machine.classList.add('win');
-    setCaption(`🎉 ${pad(fk)} 番　当選！？ 🎉`,'win'); Snd.fakewin();
+    setCaption(`🎉 ${fakeText}　当選！？ 🎉`,'win'); Snd.fakewin();
     setTimeout(()=>{ machine.classList.remove('win'); machine.classList.add('buzz'); setCaption('…と思った？','suspense'); Snd.buzzer(); },1600);
     setTimeout(()=>{
       machine.classList.remove('buzz'); setCaption('まだまだ！本番はここから！','suspense');
       fakePhase=false; done=0; BGM.set('spin'); Snd.start(); reels.forEach(r=>r.spin()); rollStart=performance.now(); nextRoll=0;
-      setTimeout(()=>reels[0].stop(+s[0],1.4,cbFor(0)),1200);
-      setTimeout(suspenseFx,1800);
-      setTimeout(()=>reels[1].stop(+s[1],3,cbFor(1)),2500);
+      if(reels.length===1){                                        // 参加者モード：名前リール1本
+        setTimeout(suspenseFx,1300); setTimeout(()=>reels[0].stop(tgt[0],3.2,cbFor(0)),2200);
+      }else{
+        setTimeout(()=>reels[0].stop(tgt[0],1.4,cbFor(0)),1200);
+        setTimeout(suspenseFx,1800);
+        setTimeout(()=>reels[1].stop(tgt[1],3,cbFor(1)),2500);
+      }
     },2900);
   };
 
-  const digits=fakePhase?pad(fk):s;
+  const targetsNow=fakePhase?fakeTgt:tgt;
   reels.forEach((r,i)=>{
     const last=i===reels.length-1, v=plan.v[i];
     let at=last?lastAt:firstAt, dur=last?D1/1000:Math.min(1.5,lastAt/1000*.6);
     if(plan.kind==='together'||fakePhase){ at=lastAt; dur=D1/1000; }          // 両桁を同時に減速・停止
     if(v==='fast'){ dur=.55; at=last?Math.max(firstAt+900,lastAt*.55):Math.max(500,firstAt*.35); }
     if(last) setTimeout(suspenseFx,Math.max(0,at-1400));
-    setTimeout(()=>r.stop(+digits[i],dur,cbFor(i),v),at);
+    setTimeout(()=>r.stop(targetsNow[i],dur,cbFor(i),v),at);
   });
 }
 
@@ -760,21 +811,27 @@ function showPrizeIdle(text){
 }
 function celebrateSmall(){ const W=innerWidth,H=innerHeight; burst(W/2,H*.4,90,-Math.PI/2,Math.PI*1.6,20); rain(40); }
 
+function entryFor(n,prize){                               // 履歴に残す1件（参加者モードでは名前と所属も保存）
+  const e={n,absent:false};
+  if(isPeople()){ e.who=S.people[n].name; e.dept=S.people[n].dept; }
+  if(prize) e.prize=prize;
+  return e;
+}
 function reveal(n){
   rolling=false;
   if(!S.prizes.length){                                  // 景品なし：番号だけで終了
-    S.drawn.push({n,absent:false}); save(); finish(n,null); return;
+    S.drawn.push(entryFor(n,null)); save(); finish(n,null); return;
   }
   prizeStage(n);
 }
 // 当選番号のあとに景品を抽選する
 function prizeStage(n){
   const units=prizeUnits(), name=(FORCEP&&units.includes(FORCEP))?FORCEP:units[rnd(units.length)];
-  const names=[...new Set(units)]; let B=[]; while(B.length<8) B=B.concat(shuffle(names));
+  const names=[...new Set(units)], B=stripFrom(names);
   const cands=B.map((x,i)=>x===name?i:-1).filter(i=>i>=0), tIdx=cands[rnd(cands.length)];
   // ① 番号の当選を軽くお祝い
   document.body.classList.remove('dim'); machine.classList.remove('spinning','buzz'); machine.classList.add('win');
-  BGM.set('off'); setCaption(`🎉 ${pad(n)} 番　当選！ 🎉`,'win'); Snd.numhit(); celebrateSmall();
+  BGM.set('off'); setCaption(`🎉 ${winLabel(n)}　当選！ 🎉`,'win'); Snd.numhit(); celebrateSmall();
   // ② 景品ルーレット開始
   setTimeout(()=>{
     machine.classList.remove('win'); setCaption('🎁 景品は…！？','suspense');
@@ -788,7 +845,7 @@ function prizeStage(n){
     setTimeout(()=>{ BGM.set('off'); Snd.suspense(); setTimeout(()=>Snd.suspense(),520); },Math.max(0,at-1000));
     setTimeout(()=>prizeReel.stop(tIdx,D,()=>{
       Snd.thump();
-      S.drawn.push({n,prize:name,absent:false}); save();
+      S.drawn.push(entryFor(n,name)); save();
       finish(n,name);
     },v),at);
   },1900);
@@ -812,6 +869,7 @@ function showClaps(ms,text){
 }
 function startIdle(){
   if(spinning) return;
+  if(isPeople()){ const nm=pool().map(i=>S.people[i].name); if(nm.length) setNameReel(stripFrom(nm)); }   // 残っている人の名前を流す
   idleOn=true; reels.forEach(r=>r.slow()); machine.classList.add('idle'); machine.classList.remove('win');
   setCaption('ボタンを押して抽選スタート！');
   if(S.prizes.length) showPrizeIdle('🎁 ？？？');
@@ -824,7 +882,7 @@ function finish(n,prize){
   const big=isBig(prize);
   document.body.classList.remove('dim'); machine.classList.remove('spinning','buzz'); machine.classList.add('win');
   if(prize) $('prizeBox').classList.add('win');
-  setCaption(big?`🌾 ${pad(n)} 番　大当たり！！ 🌾`:(prize?`🎉 ${pad(n)} 番　おめでとう！ 🎉`:`🎉 ${pad(n)} 番　当選！ 🎉`),'win');
+  setCaption(big?`🌾 ${winLabel(n)}　大当たり！！ 🌾`:(prize?`🎉 ${winLabel(n)}　おめでとう！ 🎉`:`🎉 ${winLabel(n)}　当選！ 🎉`),'win');
   BGM.set('off'); clearTimeout(bgmTimer);
   Snd.fanfare(); celebrate();                        // 大当たりも演出は通常と同じ（表示のみ変える）
   Snd.applause(5,2);                                 // 拍手
@@ -837,8 +895,9 @@ function finish(n,prize){
 }
 
 function updateBtn(){
-  const left=pool().length, total=S.end-S.start+1, pu=S.prizes.length?prizeUnits().length:null;
-  $('remain').textContent=`残り ${left} / 全 ${total} 枚　（${S.start}〜${S.end}番）`+(pu===null?'':`　景品残り ${pu} 個`);
+  const left=pool().length, total=totalCount(), pu=S.prizes.length?prizeUnits().length:null;
+  $('remain').textContent=(isPeople()?`残り ${left} / 全 ${total} 名`:`残り ${left} / 全 ${total} 枚　（${S.start}〜${S.end}番）`)+(pu===null?'':`　景品残り ${pu} 個`);
+  $('peopleInfo').textContent=isPeople()?`参加者${S.people.length}名`:'';
   $('prizeInfo').textContent=S.prizes.length?`景品${S.prizes.length}種 残り${pu}個`:'';
   if(left>0&&(pu===null||pu>0)){ btn.disabled=false; btn.classList.add('ready'); btn.textContent=S.drawn.length?'もう一回！':'抽選スタート！'; }
   else { btn.disabled=true; btn.classList.remove('ready'); btn.textContent=left>0?'景品がなくなりました':'全員抽選済み'; }
@@ -849,8 +908,9 @@ function renderHist(){
     const d=S.drawn[i], li=document.createElement('li');
     if(d.absent) li.className='absent';
     li.innerHTML='<span class="num"></span><span class="lbl"></span><span class="mark">欠席</span>';
-    li.querySelector('.num').textContent=pad(d.n);
-    li.querySelector('.lbl').textContent=d.prize?`${isBig(d.prize)?'🌾':'🎁'} ${d.prize}`:'';
+    const ppl=d.who!==undefined, num=li.querySelector('.num');
+    num.textContent=ppl?d.who:pad(d.n); if(ppl){ num.classList.add('name'); if(d.dept) li.title=d.dept; }
+    li.querySelector('.lbl').textContent=d.prize?`${isBig(d.prize)?'🌾':'🎁'} ${d.prize}`:(ppl&&d.dept?d.dept:'');
     li.onclick=()=>{ if(spinning)return; d.absent=!d.absent; save(); renderHist(); updateBtn(); };
     ul.appendChild(li);
   }
@@ -867,12 +927,17 @@ function applySettings(force){
 function init(){
   $('inStart').value=S.start; $('inEnd').value=S.end; $('inTitle').value=S.title; $('title').textContent=S.title; document.title=S.title||'抽選会';
   $('inBase').value=S.base; $('inFake').value=S.fakeFrom; $('inFx0').value=S.fx0; $('inFx1').value=S.fx1;
-  document.body.classList.toggle('hasPrize',S.prizes.length>0);
+  document.body.classList.toggle('hasPrize',S.prizes.length>0); document.body.classList.toggle('hasPeople',isPeople());
+  $('histTitle').textContent=isPeople()?'🏆 当選者':'🏆 当選番号';
+  $('histNote').innerHTML=(isPeople()?'名前':'番号')+'をクリックで「欠席」切替<br>（'+(isPeople()?'その人':'番号')+'は再抽選に戻らず、景品は戻ります）';
   buildReels(); renderHist(); updateBtn();
   { const lp=[...S.drawn].reverse().find(d=>d.prize); showPrizeIdle(lp?lp.prize:'🎁 ？？？'); }
   const lastD=S.drawn[S.drawn.length-1];
-  if(lastD){ showNumber(lastD.n); machine.classList.remove('idle'); setCaption(`前回の当選：${pad(lastD.n)} 番`); }
-  else { showNumber(S.start); startIdle(); }                 // まだ抽選していない：待機アニメ
+  if(lastD){
+    if(lastD.who!==undefined) setNameReel([lastD.who]).set(0); else showNumber(lastD.n);
+    machine.classList.remove('idle'); setCaption(`前回の当選：${lastD.who!==undefined?lastD.who+' さん':pad(lastD.n)+' 番'}`);
+  }
+  else { if(!isPeople()) showNumber(S.start); startIdle(); }                 // まだ抽選していない：待機アニメ
 }
 function applyTheme(id){
   const t=THEMES.find(x=>x.id===id)||THEMES[0];
@@ -909,11 +974,27 @@ function parsePrizes(text){
   });
   return [...map].map(([name,o])=>({name,qty:o.qty,big:o.big}));
 }
+function parsePeople(text){
+  const rows=parseCSV(text).map(r=>r.map(x=>x.trim())).filter(r=>r[0]);
+  if(rows.length&&/^(氏名|名前|参加者名?|社員名|name)$/i.test(rows[0][0])) rows.shift();   // 見出し行は読み飛ばす
+  return rows.map(r=>({name:r[0],dept:r[1]||''}));
+}
+async function readCsvFile(f){            // UTF-8／Shift_JIS（ExcelのCSV）どちらも読む
+  const buf=await f.arrayBuffer();
+  let text; try{ text=new TextDecoder('utf-8',{fatal:true}).decode(buf); }catch(_){ text=new TextDecoder('shift_jis').decode(buf); }
+  return text.replace(/^\uFEFF/,'');
+}
+async function loadPeopleFile(f){
+  if(!f||spinning) return;
+  let list=parsePeople(await readCsvFile(f));
+  if(!list.length){ alert('参加者を読み取れませんでした。\n1列目＝氏名、2列目＝所属など（省略可）のCSVにしてください。'); return; }
+  if(list.length>999){ alert('参加者が多すぎるため、先頭の999名だけを読み込みます。'); list=list.slice(0,999); }
+  if(S.drawn.length&&!confirm('参加者を読み込むと、これまでの抽選履歴がリセットされます。よろしいですか？')) return;
+  S.people=list; S.drawn=[]; save(); init();
+}
 async function loadPrizeFile(f){
   if(!f||spinning) return;
-  const buf=await f.arrayBuffer(); let text;
-  try{ text=new TextDecoder('utf-8',{fatal:true}).decode(buf); }catch(_){ text=new TextDecoder('shift_jis').decode(buf); }   // ExcelのCSV(Shift_JIS)にも対応
-  const list=parsePrizes(text.replace(/^\uFEFF/,''));
+  const list=parsePrizes(await readCsvFile(f));
   if(!list.length){ alert('景品を読み取れませんでした。\n1列目＝景品名、2列目＝数量（省略可）、3列目＝区分（省略可）のCSVにしてください。'); return; }
   S.prizes=list; save(); init();
 }
@@ -936,6 +1017,8 @@ $('inTitle').oninput=e=>{ S.title=e.target.value; $('title').textContent=S.title
 $('selTheme').innerHTML=THEMES.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
 $('selTheme').onchange=e=>{ applyTheme(e.target.value); e.target.blur(); };
 $('inCsv').onchange=async e=>{ await loadPrizeFile(e.target.files[0]); e.target.value=''; };
+$('inPeople').onchange=async e=>{ await loadPeopleFile(e.target.files[0]); e.target.value=''; };
+$('btnPeopleClear').onclick=()=>{ if(spinning||!S.people.length)return; if(confirm('参加者の設定を解除し、数字の抽選に戻します（抽選履歴もリセットされます）。よろしいですか？')){ S.people=[]; S.drawn=[]; save(); init(); } };
 $('btnPrizeClear').onclick=()=>{ if(spinning||!S.prizes.length)return; if(confirm('景品の設定を解除します（番号だけの抽選に戻ります）。よろしいですか？')){ S.prizes=[]; save(); init(); } };
 $('btnBgm').onclick=()=>setBgm(!S.bgm);
 $('btnSound').onclick=()=>setSound(!soundOn);
@@ -957,7 +1040,7 @@ load(); applyTheme(S.theme); setBgm(S.bgm); init(); fitBar();
 const unlock=()=>{ Snd.init(); BGM.start(); removeEventListener('pointerdown',unlock); removeEventListener('keydown',unlock); };
 addEventListener('pointerdown',unlock); addEventListener('keydown',unlock); requestAnimationFrame(frame);
 /* テスト用の公開口（画面操作には不要） */
-window.__lottery={isBig,forceP:v=>{FORCEP=v;},bgm:()=>({mode:BGM.mode,running:!!BGM.timer}),prizeUnits:()=>prizeUnits(),parsePrizes,lastFx:()=>[...lastFx],force:v=>{FORCE=v;},forceN:v=>{FORCEN=v;},draw,state:()=>S};
+window.__lottery={parsePeople,isBig,forceP:v=>{FORCEP=v;},bgm:()=>({mode:BGM.mode,running:!!BGM.timer}),prizeUnits:()=>prizeUnits(),parsePrizes,lastFx:()=>[...lastFx],force:v=>{FORCE=v;},forceN:v=>{FORCEN=v;},draw,state:()=>S};
 })();
 </script>
 </body>
