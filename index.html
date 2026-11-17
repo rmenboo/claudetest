@@ -692,7 +692,7 @@ function draw(){
       return {plan:{kind:'reel',v:[FORCE,FORCE]},dim:false};
     }
     let plan=N;
-    if(rnd(1000)<(.25+.6*prog)*1000){                                         // 発生率 25% → 85%
+    if(rnd(1000)<(.55+.4*prog)*1000){                                         // 発生率 55% → 95%
       const r=rnd(100);
       plan = r<22 ? {kind:'reel',v:[rv(),'normal']}          // 1桁目だけ
            : r<36 ? {kind:'reel',v:['normal',rv()]}          // 2桁目だけ
@@ -701,7 +701,7 @@ function draw(){
            : r<88 ? {kind:'nudge',v:['park','normal']}       // 2桁目が止まると同時に1桁目が動く
            : prog>=.35 ? {kind:'fakewin',v:NORM} : {kind:'together',v:NORM};   // フェイク当選（中盤以降）
     }
-    return {plan,dim:rnd(100)<10+25*prog};
+    return {plan,dim:rnd(100)<25+30*prog};
   };
   // 使われている演出の名前の集合（前回と重なったら引き直す）
   const fxOf=({plan,dim})=>{
@@ -801,7 +801,7 @@ function prizeStage(n){
     const idx=S.drawn.length+1, active=idx>=S.fakeFrom;
     const prog=Math.min(1,Math.max(0,(idx-S.fakeFrom)/Math.max(1,Math.min(S.end-S.start+1,S.prizes.reduce((a,x)=>a+x.qty,0))-S.fakeFrom)));
     let v='normal';
-    if(active&&rnd(100)<20+35*prog){ const c=['restart','back','crawl','bounce','wobble'].filter(x=>!lastFx.has(x)); if(c.length) v=c[rnd(c.length)]; }
+    if(active&&rnd(100)<40+40*prog){ const c=['restart','back','crawl','bounce','wobble'].filter(x=>!lastFx.has(x)); if(c.length) v=c[rnd(c.length)]; }
     if(v!=='normal') lastFx.add(v);
     const Tp=Math.max(3,S.base*(.45+rnd(500)/1000)), D=Math.min(3.4,Tp*.55), at=(Tp-D)*1000;
     setTimeout(()=>{ BGM.set('off'); Snd.suspense(); setTimeout(()=>Snd.suspense(),520); },Math.max(0,at-1000));
