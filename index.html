@@ -45,6 +45,7 @@ body{
   background:#3b1f5c;color:#fff;cursor:pointer;font-size:14px}
 #bar button:hover{background:#56308a}
 body.hideBar #bar{display:none}
+body.hideBar .reel{--fs:min(calc(54vw / (var(--n) * .78)),34vh)}   /* 1920x1080：設定バーを隠すとリールを大きく */
 body.hideBar #showBar{display:block}
 #showBar{display:none;position:fixed;top:6px;right:8px;z-index:6;opacity:.25;font-size:12px;
   background:none;border:none;color:#fff;cursor:pointer}
@@ -52,7 +53,7 @@ body.hideBar #showBar{display:block}
 
 main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap:1.5vw;
   height:calc(100% - var(--barh,56px));padding:1vh 1.5vw}
-.stage{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2vh;min-width:0}
+.stage{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.4vh;min-width:0}
 .title{font-size:min(7vh,4.4vw);font-weight:900;letter-spacing:.12em;text-align:center;white-space:nowrap;
   background:linear-gradient(#fff6c4,#ffd54a 55%,#ff9f1c);-webkit-background-clip:text;background-clip:text;color:transparent;
   filter:drop-shadow(0 0 14px rgba(255,160,40,.6)) drop-shadow(0 3px 0 rgba(90,30,0,.7))}
