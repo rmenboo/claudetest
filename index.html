@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>忘年会 抽選スロット</title>
+<title>令和8年度収穫祭 大抽選会</title>
 <style>
 :root{
   --gold:#ffd54a; --gold2:#ff9f1c; --red:#e8265a; --ink:#2a0a3a;
@@ -39,6 +39,7 @@ body{
 #bar label{display:flex;align-items:center;gap:.4rem;white-space:nowrap}
 #bar input[type=number]{width:5.5em}
 #bar input[type=text]{width:11em}
+#bar #inTitle{width:16em}
 #bar input{padding:.35rem .5rem;border-radius:6px;border:1px solid #888;background:#1d0b30;color:#fff;font-size:14px}
 #bar button{padding:.4rem .8rem;border-radius:6px;border:1px solid rgba(255,255,255,.3);
   background:#3b1f5c;color:#fff;cursor:pointer;font-size:14px}
@@ -52,7 +53,10 @@ body.hideBar #showBar{display:block}
 main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap:1.5vw;
   height:calc(100% - var(--barh,56px));padding:1vh 1.5vw}
 .stage{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2vh;min-width:0}
-.prize{font-size:min(5vh,3.2vw);font-weight:900;color:var(--gold);letter-spacing:.1em;
+.title{font-size:min(7vh,4.4vw);font-weight:900;letter-spacing:.12em;text-align:center;white-space:nowrap;
+  background:linear-gradient(#fff6c4,#ffd54a 55%,#ff9f1c);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 14px rgba(255,160,40,.6)) drop-shadow(0 3px 0 rgba(90,30,0,.7))}
+.prize{font-size:min(4.2vh,2.8vw);font-weight:900;color:var(--gold);letter-spacing:.1em;
   text-shadow:0 0 18px rgba(255,213,74,.7);min-height:1.2em;text-align:center}
 
 .machine{
@@ -76,7 +80,7 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
 .reels{position:relative;display:flex;gap:1.2vmin;padding:1.2vmin;border-radius:1.6vmin;background:#3a1200;
   box-shadow:inset 0 0 2vmin #000}
 .reel{
-  --fs:min(calc(54vw / (var(--n) * .78)),34vh);
+  --fs:min(calc(54vw / (var(--n) * .78)),29vh);
   font-size:var(--fs);width:.78em;height:1.15em;overflow:hidden;position:relative;border-radius:1vmin;
   background:linear-gradient(#cdbfa6,#fffaf0 18%,#fffaf0 82%,#cdbfa6);
 }
@@ -142,7 +146,8 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
 <div class="bg"></div>
 
 <header id="bar">
-  <h1>🎊 忘年会 抽選スロット</h1>
+  <h1>🎊 抽選スロット</h1>
+  <label>タイトル <input id="inTitle" type="text" value="令和8年度収穫祭 大抽選会"></label>
   <label>クジ番号 <input id="inStart" type="number" min="0" max="99" value="1"> 〜 <input id="inEnd" type="number" min="1" max="99" value="30"></label>
   <label title="スタートから止まるまでの基本時間。実際は毎回ランダムで約0.5〜1.6倍になります">基本時間 <input id="inBase" type="number" min="4" max="30" step="1" value="8">秒</label>
   <label>賞の名前 <input id="inLabel" type="text" placeholder="例：豪華景品"></label>
@@ -156,6 +161,7 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
 
 <main>
   <section class="stage">
+    <h2 class="title" id="title"></h2>
     <div class="prize" id="prize"></div>
     <div class="machine idle" id="machine">
       <div class="lights"></div>
@@ -184,7 +190,7 @@ const STORE = 'nenkai-lottery-v1';
 const SPIN_SPEED = 26;            // リールの回転速度（桁/秒）
 
 /* ============ 状態 ============ */
-let S = { start:1, end:30, label:'', base:8, drawn:[] };   // drawn: [{n,label,absent}]
+let S = { title:'令和8年度収穫祭 大抽選会', start:1, end:30, label:'', base:8, drawn:[] };   // drawn: [{n,label,absent}]
 let width = 2, reels = [], spinning = false, soundOn = true;
 
 function load(){
@@ -436,7 +442,8 @@ function applySettings(force){
   S.start=s; S.end=e; S.drawn=[]; save(); init(); return true;
 }
 function init(){
-  $('inStart').value=S.start; $('inEnd').value=S.end; $('inLabel').value=S.label; $('inBase').value=S.base;
+  $('inStart').value=S.start; $('inEnd').value=S.end; $('inTitle').value=S.title; $('title').textContent=S.title; document.title=S.title||'抽選会';
+  $('inLabel').value=S.label; $('inBase').value=S.base;
   buildReels(); renderHist(); updateBtn();
   const lastD=S.drawn[S.drawn.length-1];
   if(lastD){ showNumber(lastD.n); machine.classList.remove('idle'); setCaption(`前回の当選：${pad(lastD.n)} 番`); }
@@ -454,6 +461,7 @@ function fitBar(){ document.documentElement.style.setProperty('--barh',document.
 btn.onclick=()=>{ draw(); btn.blur(); };
 $('btnApply').onclick=()=>applySettings(false);
 $('inBase').onchange=e=>{ S.base=Math.min(30,Math.max(4,parseInt(e.target.value,10)||8)); e.target.value=S.base; save(); };
+$('inTitle').oninput=e=>{ S.title=e.target.value; $('title').textContent=S.title; document.title=S.title||'抽選会'; save(); };
 $('inLabel').oninput=e=>{ S.label=e.target.value; save(); if(!spinning) $('prize').textContent=S.label; };
 $('btnSound').onclick=()=>setSound(!soundOn);
 $('btnFull').onclick=toggleFull;
