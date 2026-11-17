@@ -140,8 +140,6 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
 .title{font-size:min(7vh,4.4vw);font-weight:var(--title-weight);letter-spacing:.12em;text-align:center;white-space:nowrap;
   background:var(--title-grad);-webkit-background-clip:text;background-clip:text;color:transparent;
   filter:var(--title-fx)}
-.prize{font-size:min(4.2vh,2.8vw);font-weight:900;color:var(--gold);letter-spacing:.1em;
-  text-shadow:var(--prize-glow);min-height:1.2em;text-align:center}
 
 .machine{
   --n:2; position:relative;padding:min(2.2vh,1.4vw);border-radius:2.5vmin;
@@ -231,8 +229,8 @@ body.hasPrize .title{font-size:min(6vh,4vw)}
 body.hasPrize .stage{gap:1.2vh}
 #prizeInfo{font-size:13px;opacity:.85}
 /* 暗転（スポットライト）：最後の1桁の前に周りを暗くする */
-.title,.prize,.remain,.hint,.history,.bg{transition:opacity .7s}
-body.dim .title,body.dim .prize,body.dim .remain,body.dim .hint,body.dim .history{opacity:.1}
+.title,.remain,.hint,.history,.bg{transition:opacity .7s}
+body.dim .title,body.dim .remain,body.dim .hint,body.dim .history{opacity:.1}
 body.dim .bg{opacity:.12}
 body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--dim-glow);animation:heart .9s ease-in-out infinite}
 @keyframes heart{0%,100%{transform:scale(1)}15%{transform:scale(1.025)}30%{transform:scale(1)}45%{transform:scale(1.015)}}
@@ -269,11 +267,9 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
   <label>デザイン <select id="selTheme"></select></label>
   <label title="1列目＝景品名、2列目＝数量（省略時は1個）、3列目＝区分（「大当たり」や★を書くと特別演出。空欄は通常）。設定すると、当選番号に続いて景品も抽選します">景品CSV <input id="inCsv" type="file" accept=".csv,.txt,text/csv"></label>
   <button id="btnPrizeClear" title="景品の設定を解除（番号だけの抽選に戻ります）">景品クリア</button><span id="prizeInfo"></span>
-  <label>賞の名前 <input id="inLabel" type="text" placeholder="例：豪華景品"></label>
   <button id="btnApply" title="番号の範囲を反映（抽選履歴はリセット）">設定を反映</button>
   <button id="btnSound">🔊 音ON</button>
   <button id="btnBgm" title="Bキーでも切替">🎵 BGM ON</button>
-  <button id="btnSpeak" title="当選時に「○番、おめでとうございます」と音声で読み上げ（端末の日本語音声を使用）">🗣 読み上げOFF</button>
   <button id="btnFull">⛶ 全画面</button>
   <button id="btnHide" title="Hキーでも切替">設定を隠す</button>
   <button id="btnReset">リセット</button>
@@ -283,7 +279,6 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
 <main>
   <section class="stage">
     <h2 class="title" id="title"></h2>
-    <div class="prize" id="prize"></div>
     <div class="machine idle" id="machine">
       <div class="lights"></div>
       <div class="reels" id="reels"></div>
@@ -320,7 +315,7 @@ const THEMES=[
   {id:'neon',   name:'④ ネオン',              confetti:['#35f2ff','#ff2bd6','#7a0bff','#b6ff3a','#ffffff','#ffe93d']},
   {id:'pop',    name:'⑤ ポップ（お祭り）',    confetti:['#ff3d7f','#ffb23d','#ffe93d','#4fd16b','#3db8ff','#a46bff']}
 ];
-let S = { fx0:55, fx1:95, bgm:true, speak:false, prizes:[], theme:'gold', title:'令和8年度収穫祭 大抽選会', start:1, end:30, label:'', base:8, fakeFrom:6, drawn:[] };   // drawn: [{n,label,absent}]
+let S = { fx0:55, fx1:95, bgm:true, prizes:[], theme:'gold', title:'令和8年度収穫祭 大抽選会', start:1, end:30, base:8, fakeFrom:6, drawn:[] };   // drawn: [{n,prize?,absent}]
 let FORCE = null, FORCEN = null, lastFx = new Set();   // lastFx：直前の抽選で使った演出
 let idleOn = false, idleTimer = null, bgmTimer = null, lastGlitter = 0, FORCEP = null;
 let width = 2, reels = [], spinning = false, rolling = false, soundOn = true, prizeReel = null;
@@ -639,7 +634,7 @@ function draw(){
   spinning=true; rolling=true; btn.disabled=true; btn.classList.remove('ready'); btn.textContent='抽選中…';
   machine.classList.remove('idle','win','buzz'); machine.classList.add('spinning');
   document.body.classList.remove('dim');
-  setCaption('回転中…ドキドキ！'); $('prize').textContent=S.label;
+  setCaption('回転中…ドキドキ！');
   $('prizeBox').classList.remove('win'); if(S.prizes.length) showPrizeIdle('🎁 ？？？');
   Snd.start(); reels.forEach(r=>r.spin()); rollStart=performance.now(); nextRoll=0;
 
@@ -753,7 +748,7 @@ function celebrateSmall(){ const W=innerWidth,H=innerHeight; burst(W/2,H*.4,90,-
 function reveal(n){
   rolling=false;
   if(!S.prizes.length){                                  // 景品の設定なし：従来どおり
-    S.drawn.push({n,label:S.label,absent:false}); save(); finish(n,null); return;
+    S.drawn.push({n,absent:false}); save(); finish(n,null); return;
   }
   prizeStage(n);
 }
@@ -779,7 +774,7 @@ function prizeStage(n){
     setTimeout(()=>{ BGM.set('off'); Snd.suspense(); setTimeout(()=>Snd.suspense(),520); },Math.max(0,at-1000));
     setTimeout(()=>prizeReel.stop(tIdx,D,()=>{
       Snd.thump();
-      S.drawn.push({n,label:S.label,prize:name,absent:false}); save();
+      S.drawn.push({n,prize:name,absent:false}); save();
       finish(n,name);
     },v),at);
   },1900);
@@ -801,10 +796,6 @@ function showClaps(ms,text){
   },140);
   setTimeout(()=>{ box.innerHTML=''; },ms+800);
 }
-function speak(text){
-  if(!S.speak||!('speechSynthesis' in window)) return;
-  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang='ja-JP'; u.rate=1; u.pitch=1.1; speechSynthesis.speak(u); }catch(e){}
-}
 function startIdle(){
   if(spinning) return;
   idleOn=true; reels.forEach(r=>r.slow()); machine.classList.add('idle'); machine.classList.remove('win');
@@ -824,7 +815,6 @@ function finish(n,prize){
   Snd.fanfare(); celebrate();                                         // 大当たりも通常と同じ演出
   Snd.applause(5,2);                                            // 拍手
   showClaps(6000,'パチパチパチパチ！！　おめでとう！！　👏👏👏');
-  setTimeout(()=>speak(big?`大当たり！${n}番、${prize}、おめでとうございます`:(prize?`${n}番、${prize}、おめでとうございます`:`${n}番、おめでとうございます`)),1500);
   const f=$('flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
   setTimeout(()=>machine.classList.remove('win'),4500);
   renderHist(); updateBtn();
@@ -846,7 +836,7 @@ function renderHist(){
     if(d.absent) li.className='absent';
     li.innerHTML='<span class="num"></span><span class="lbl"></span><span class="mark">欠席</span>';
     li.querySelector('.num').textContent=pad(d.n);
-    li.querySelector('.lbl').textContent=d.prize?`${isBig(d.prize)?'🌾':'🎁'} ${d.prize}`:(d.label||'');
+    li.querySelector('.lbl').textContent=d.prize?`${isBig(d.prize)?'🌾':'🎁'} ${d.prize}`:'';
     li.onclick=()=>{ if(spinning)return; d.absent=!d.absent; save(); renderHist(); updateBtn(); };
     ul.appendChild(li);
   }
@@ -861,14 +851,13 @@ function applySettings(force){
 }
 function init(){
   $('inStart').value=S.start; $('inEnd').value=S.end; $('inTitle').value=S.title; $('title').textContent=S.title; document.title=S.title||'抽選会';
-  $('inLabel').value=S.label; $('inBase').value=S.base; $('inFake').value=S.fakeFrom; $('inFx0').value=S.fx0; $('inFx1').value=S.fx1;
+  $('inBase').value=S.base; $('inFake').value=S.fakeFrom; $('inFx0').value=S.fx0; $('inFx1').value=S.fx1;
   document.body.classList.toggle('hasPrize',S.prizes.length>0);
   buildReels(); renderHist(); updateBtn();
   { const lp=[...S.drawn].reverse().find(d=>d.prize); showPrizeIdle(lp?lp.prize:'🎁 ？？？'); }
   const lastD=S.drawn[S.drawn.length-1];
   if(lastD){ showNumber(lastD.n); machine.classList.remove('idle'); setCaption(`前回の当選：${pad(lastD.n)} 番`); }
   else { showNumber(S.start); machine.classList.add('idle'); setCaption('ボタンを押して抽選スタート！'); startIdle(); }
-  $('prize').textContent=S.label;
 }
 function applyTheme(id){
   const t=THEMES.find(x=>x.id===id)||THEMES[0];
@@ -915,7 +904,6 @@ async function loadPrizeFile(f){
 }
 function setSound(on){ soundOn=on; $('btnSound').textContent=on?'🔊 音ON':'🔇 音OFF'; BGM.refresh(); }
 function setBgm(on){ S.bgm=on; $('btnBgm').textContent=on?'🎵 BGM ON':'🎵 BGM OFF'; save(); BGM.refresh(); }
-function setSpeak(on){ S.speak=on; $('btnSpeak').textContent=on?'🗣 読み上げON':'🗣 読み上げOFF'; save(); if(!on&&'speechSynthesis' in window) speechSynthesis.cancel(); }
 function toggleFull(){
   if(document.fullscreenElement) document.exitFullscreen();
   else document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();
@@ -930,13 +918,11 @@ const fxChange=()=>{ S.fx0=Math.min(100,Math.max(0,parseInt($('inFx0').value,10)
 $('inFx0').onchange=fxChange; $('inFx1').onchange=fxChange;
 $('inBase').onchange=e=>{ S.base=Math.min(30,Math.max(4,parseInt(e.target.value,10)||8)); e.target.value=S.base; save(); };
 $('inTitle').oninput=e=>{ S.title=e.target.value; $('title').textContent=S.title; document.title=S.title||'抽選会'; save(); };
-$('inLabel').oninput=e=>{ S.label=e.target.value; save(); if(!spinning) $('prize').textContent=S.label; };
 $('selTheme').innerHTML=THEMES.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
 $('selTheme').onchange=e=>{ applyTheme(e.target.value); e.target.blur(); };
 $('inCsv').onchange=async e=>{ await loadPrizeFile(e.target.files[0]); e.target.value=''; };
 $('btnPrizeClear').onclick=()=>{ if(spinning||!S.prizes.length)return; if(confirm('景品の設定を解除します（番号だけの抽選に戻ります）。よろしいですか？')){ S.prizes=[]; save(); init(); } };
 $('btnBgm').onclick=()=>setBgm(!S.bgm);
-$('btnSpeak').onclick=()=>setSpeak(!S.speak);
 $('btnSound').onclick=()=>setSound(!soundOn);
 $('btnFull').onclick=toggleFull;
 $('btnHide').onclick=toggleBar; $('showBar').onclick=toggleBar;
@@ -951,7 +937,7 @@ addEventListener('keydown',e=>{
   else if(e.key==='t'||e.key==='T'){ const i=THEMES.findIndex(x=>x.id===S.theme); applyTheme(THEMES[(i+1)%THEMES.length].id); }
 });
 
-load(); applyTheme(S.theme); setBgm(S.bgm); setSpeak(S.speak); init(); fitBar();
+load(); applyTheme(S.theme); setBgm(S.bgm); init(); fitBar();
 // 最初のクリック／キー操作で音声を有効化（ブラウザの仕様）し、待機BGMを開始
 const unlock=()=>{ Snd.init(); BGM.start(); removeEventListener('pointerdown',unlock); removeEventListener('keydown',unlock); };
 addEventListener('pointerdown',unlock); addEventListener('keydown',unlock); requestAnimationFrame(frame);
