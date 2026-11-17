@@ -237,22 +237,6 @@ body.dim .bg{opacity:.12}
 body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--dim-glow);animation:heart .9s ease-in-out infinite}
 @keyframes heart{0%,100%{transform:scale(1)}15%{transform:scale(1.025)}30%{transform:scale(1)}45%{transform:scale(1.015)}}
 .machine.buzz{animation:shake .5s 2}
-/* 大当たり演出 */
-#jackpot{position:fixed;inset:0;z-index:17;pointer-events:none;opacity:0;overflow:hidden;
-  background:radial-gradient(circle at 50% 50%,rgba(255,200,60,.18),rgba(20,8,0,.55))}
-#jackpot.go{animation:jpShow 6.5s ease-in-out}
-@keyframes jpShow{0%{opacity:0}6%{opacity:1}88%{opacity:1}100%{opacity:0}}
-#jackpot .rays{position:absolute;left:50%;top:50%;width:260vmax;height:260vmax;margin:-130vmax 0 0 -130vmax;
-  background:repeating-conic-gradient(rgba(255,226,110,.5) 0 6deg,rgba(255,226,110,0) 6deg 14deg);
-  -webkit-mask-image:radial-gradient(circle,#000 0,rgba(0,0,0,.4) 12%,transparent 30%);mask-image:radial-gradient(circle,#000 0,rgba(0,0,0,.4) 12%,transparent 30%);
-  animation:spinRays 9s linear infinite}
-@keyframes spinRays{to{transform:rotate(360deg)}}
-.jp-main{position:absolute;left:0;right:0;top:3vh;text-align:center;font-size:14vh;font-weight:900;white-space:nowrap;letter-spacing:.06em;
-  background:linear-gradient(#fffbe0,#ffd54a 50%,#ff8c1a);-webkit-background-clip:text;background-clip:text;color:transparent;
-  filter:drop-shadow(0 0 2.5vh #ff9f1c) drop-shadow(0 .8vh 0 #7a2a00);animation:jpPop 1s cubic-bezier(.2,2,.4,1)}
-.jp-prize{position:absolute;left:0;right:0;bottom:13vh;text-align:center;font-size:11vh;font-weight:900;color:#fff;white-space:nowrap;
-  text-shadow:0 0 3vh #ff9f1c,0 0 6vh #e8265a,0 .6vh 0 #7a2a00;animation:jpPop 1s .25s cubic-bezier(.2,2,.4,1) backwards}
-@keyframes jpPop{from{transform:scale(.1);opacity:0}to{transform:scale(1);opacity:1}}
 /* 拍手 */
 #claps{position:fixed;left:0;right:0;bottom:0;height:100%;z-index:18;pointer-events:none;overflow:hidden}
 .clap-text{position:absolute;bottom:1.5vh;left:0;white-space:nowrap;font-size:9vh;font-weight:900;color:#fff;
@@ -319,7 +303,6 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
 
 <canvas id="fx"></canvas>
 <div id="flash"></div>
-<div id="jackpot"><div class="rays"></div><div class="jp-main">🌾 大当たり！！ 🌾</div><div class="jp-prize" id="jpPrize"></div></div>
 <div id="claps"></div>
 
 <script>
@@ -408,17 +391,6 @@ const Snd = {
     const n=Math.floor(dur*30);
     for(let i=0;i<n;i++){ const k=i/n; if(Math.random()<1-k*.65) this.noise(t+k*dur+Math.random()*.03,.03+Math.random()*.03,.11*(1-k*.6)+.02,'bandpass',R(1500,4500),1.2); }
     this.noise(t,dur,.1,'bandpass',1400,.4,true); },
-  jackpot(){ if(!this.ok())return; const t=this.ctx.currentTime, R=(a,b)=>a+Math.random()*(b-a);   // 大当たり
-    for(let i=0;i<26;i++) this.taiko(t+i*.055,.3+i*.028);                       // 加速する太鼓の連打
-    this.tone(200,t,1.5,'sawtooth',.13,3000);
-    this.noise(t+1.4,.25,.7,'bandpass',2200,.6); this.taiko(t+1.45,1); this.taiko(t+1.65,1);   // ドドン！
-    const m=t+1.7;
-    [[523.25,0,.2],[659.25,.2,.2],[783.99,.4,.2],[1046.5,.6,.2],[1318.5,.8,.2],[1568,1,1.8]].forEach(([f,d,l])=>{   // 上昇ファンファーレ
-      this.tone(f,m+d,l,'sawtooth',.14); this.tone(f*2,m+d,l,'square',.05); this.tone(f*1.5,m+d,l,'sawtooth',.06); });
-    [523.25,659.25,783.99,1046.5].forEach(f=>this.tone(f,m+1.9,2.2,'sawtooth',.09));
-    for(let i=0;i<48;i++) this.tone([1046.5,1174.7,1318.5,1568,1760,2093][rnd(6)],m+i*.07+R(0,.03),.8,'sine',.06);   // 鈴
-    this.noise(m,3.5,.45,'highpass',6000); this.noise(m+.2,5,.35,'bandpass',900,.5,true);       // シンバルと大歓声
-    for(let i=0;i<4;i++) this.taiko(m+2.3+i*.25,.8); },
   numhit(){ if(!this.ok())return; const t=this.ctx.currentTime;          // 番号が決まった「ジャン！」
     this.taiko(t,.9); [523.25,659.25,783.99].forEach(f=>this.tone(f,t,.7,'sawtooth',.1)); this.noise(t,.9,.25,'highpass',5000); },
   fake(){ if(!this.ok())return; const t=this.ctx.currentTime;     // 「ピロッ！」動き出し予告
@@ -612,10 +584,6 @@ function rain(n){
 function glitter(){      // 待機中のキラキラ（ゆっくり舞う）
   for(let i=0;i<3;i++) parts.push({x:Math.random()*innerWidth,y:-10,vx:(Math.random()-.5)*.6,vy:.6+Math.random()*.8,g:.004,
     r:2+Math.random()*3,rot:Math.random()*6,vr:(Math.random()-.5)*.1,c:COLORS[rnd(COLORS.length)],life:0,max:900,round:true});
-}
-function emojiRain(list,n){
-  for(let i=0;i<n;i++) parts.push({e:list[rnd(list.length)],x:Math.random()*innerWidth,y:-30-Math.random()*150,vx:(Math.random()-.5)*2,vy:1.5+Math.random()*3,g:.05,
-    r:7+Math.random()*7,rot:Math.random()*6,vr:(Math.random()-.5)*.12,c:'#fff',life:0,max:420});
 }
 function celebrate(){
   const W=innerWidth,H=innerHeight;
@@ -837,15 +805,6 @@ function speak(text){
   if(!S.speak||!('speechSynthesis' in window)) return;
   try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang='ja-JP'; u.rate=1; u.pitch=1.1; speechSynthesis.speak(u); }catch(e){}
 }
-function jackpotFx(n,prize){
-  const j=$('jackpot'); $('jpPrize').textContent=prize; j.classList.remove('go'); void j.offsetWidth; j.classList.add('go');
-  const t0=performance.now(), iv=setInterval(()=>{                        // 花火と🌾の雨を6秒間
-    const el=performance.now()-t0; if(el>6000){ clearInterval(iv); return; }
-    burst(Math.random()*innerWidth,innerHeight*(.15+Math.random()*.5),70,0,Math.PI*2,17);
-    emojiRain(['🌾','🍚','🌾','✨'],6);
-  },320);
-  const f=$('flash'); f.style.background='#ffd54a'; setTimeout(()=>{ f.style.background=''; },1200);
-}
 function startIdle(){
   if(spinning) return;
   idleOn=true; reels.forEach(r=>r.slow()); machine.classList.add('idle'); machine.classList.remove('win');
@@ -862,15 +821,14 @@ function finish(n,prize){
   if(prize) $('prizeBox').classList.add('win');
   setCaption(big?`🌾 ${pad(n)} 番　大当たり！！ 🌾`:(prize?`🎉 ${pad(n)} 番　おめでとう！ 🎉`:`🎉 ${pad(n)} 番　当選！ 🎉`),'win');
   BGM.set('off'); clearTimeout(bgmTimer);
-  if(big){ Snd.jackpot(); jackpotFx(n,prize); } else Snd.fanfare();
-  celebrate(); if(big){ setTimeout(celebrate,1800); setTimeout(celebrate,3600); }
-  Snd.applause(big?7:5,2);                                            // 拍手
-  showClaps(big?8000:6000,big?'パチパチパチパチ！！　大当たり！　おめでとう！！　👏👏👏　🌾🌾🌾':'パチパチパチパチ！！　おめでとう！！　👏👏👏');
+  Snd.fanfare(); celebrate();                                         // 大当たりも通常と同じ演出
+  Snd.applause(5,2);                                            // 拍手
+  showClaps(6000,'パチパチパチパチ！！　おめでとう！！　👏👏👏');
   setTimeout(()=>speak(big?`大当たり！${n}番、${prize}、おめでとうございます`:(prize?`${n}番、${prize}、おめでとうございます`:`${n}番、おめでとうございます`)),1500);
   const f=$('flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
-  setTimeout(()=>machine.classList.remove('win'),big?8000:4500);
+  setTimeout(()=>machine.classList.remove('win'),4500);
   renderHist(); updateBtn();
-  bgmTimer=setTimeout(()=>{ if(!spinning) BGM.set('idle'); },big?12000:8500);   // しばらくしたらBGMを再開
+  bgmTimer=setTimeout(()=>{ if(!spinning) BGM.set('idle'); },8500);   // しばらくしたらBGMを再開
   clearTimeout(idleTimer); idleTimer=setTimeout(startIdle,30000);              // 30秒操作がなければ待機アニメ
 }
 
