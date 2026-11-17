@@ -192,6 +192,7 @@ const SPIN_SPEED = 14;            // リールの回転速度（桁/秒）
 
 /* ============ 状態 ============ */
 let S = { title:'令和8年度収穫祭 大抽選会', start:1, end:30, label:'', base:8, drawn:[] };   // drawn: [{n,label,absent}]
+let FORCE = null;
 let width = 2, reels = [], spinning = false, soundOn = true;
 
 function load(){
@@ -247,8 +248,10 @@ const Snd = {
   roll(vol){ if(!this.ok())return; this.noise(this.ctx.currentTime,.05,vol,'bandpass',1700,.8); },
   start(){ if(!this.ok())return; const t=this.ctx.currentTime;
     this.tone(180,t,.5,'sawtooth',.12,900); this.noise(t,.4,.12,'highpass',3000); },
-  thump(){ if(!this.ok())return; const t=this.ctx.currentTime;
-    this.tone(170,t,.28,'sine',.6,45); this.noise(t,.06,.2,'lowpass',1200); },
+  thump(v=1){ if(!this.ok())return; const t=this.ctx.currentTime;
+    this.tone(170,t,.28,'sine',.6*v,45); this.noise(t,.06,.2*v,'lowpass',1200); },
+  fake(){ if(!this.ok())return; const t=this.ctx.currentTime;     // 「ピロッ！」動き出し予告
+    this.tone(500,t,.22,'square',.1,1500); this.tone(1000,t+.08,.2,'triangle',.08,2000); },
   suspense(){ if(!this.ok())return; const t=this.ctx.currentTime;   // ドン…ドン… 心臓音
     this.tone(70,t,.18,'sine',.7,40); this.tone(70,t+.16,.18,'sine',.5,40); },
   taiko(t,vol=.9){ this.tone(160,t,.4,'sine',vol,48); this.noise(t,.12,vol*.5,'lowpass',500); },
@@ -280,31 +283,69 @@ const Snd = {
 };
 
 /* ============ リール ============ */
+const EASE={
+  out:t=>1-Math.pow(1-t,3),
+  inout:t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2,
+  sine:t=>-(Math.cos(Math.PI*t)-1)/2
+};
 class Reel{
   constructor(el){
     this.el=el; this.strip=document.createElement('div'); this.strip.className='strip';
     for(let k=0;k<20;k++){ const c=document.createElement('div'); c.className='cell'; c.textContent=k%10; this.strip.appendChild(c); }
-    el.appendChild(this.strip); this.pos=0; this.mode='idle'; this.lastFloor=0; this.render(0);
+    el.appendChild(this.strip); this.pos=0; this.mode='idle'; this.lastFloor=0; this.segs=[]; this.cur=null; this.render(0);
   }
   set(d){ this.pos=(10-d)%10; this.mode='idle'; this.render(0); }
   spin(){ this.mode='spin'; }
-  stop(d,dur,cb){
+  /* variant: normal=普通 / restart=止まったと思ったら動き出す / back=1つ戻る /
+              crawl=じりじり / fast=やけに早く止まる */
+  stop(d,dur,cb,variant='normal'){
     const start=this.pos, dist=Math.ceil(SPIN_SPEED*dur/3), raw=start+dist;
-    this.start=start; this.end=Math.ceil((raw+d)/10)*10-d;   // 表示桁 = (-pos) mod 10 なので pos ≡ -d
-    this.dur=dur; this.cb=cb;
-    this.t0=performance.now(); this.mode='stop';
+    const end=Math.ceil((raw+d)/10)*10-d;       // 表示桁 = (-pos) mod 10 なので pos ≡ -d
+    this.end=end; this.cb=cb; this.segs=[]; this.cur=null; this.lastFloor=Math.floor(start);
+    const mv=(to,du,ease,o={})=>this.segs.push(Object.assign({type:'move',to,dur:du,ease},o));
+    const hold=(du,o={})=>this.segs.push(Object.assign({type:'hold',dur:du},o));
+    const soft=()=>Snd.thump(.55);
+    if(variant==='restart'){                      // 止まった…と思いきや、また動いて1〜3つ進む
+      const k=1+rnd(3);
+      mv(end-k,dur*.9,'out',{onEnd:soft}); hold(.5+rnd(500)/1000);
+      for(let j=1;j<=k;j++){
+        mv(end-k+j,.42,'inout',j===1?{onStart:()=>{Snd.fake();setCaption('あれ…？動いた！？','suspense');}}:{});
+        if(j<k) hold(.12);
+      }
+    }else if(variant==='back'){                   // 行き過ぎて1つ逆戻り
+      mv(end+1,dur,'out',{onEnd:soft}); hold(.5+rnd(400)/1000);
+      mv(end,.55,'inout',{onStart:()=>{Snd.fake();setCaption('戻る…！？','suspense');}});
+    }else if(variant==='crawl'){                  // ほぼ止まってから、じりじり
+      const k=2+rnd(2);
+      mv(end-k,dur*.85,'out');
+      for(let j=1;j<=k;j++){
+        mv(end-k+j-.4,.7+rnd(400)/1000,'sine',j===1?{onStart:()=>setCaption('じり…じり…','suspense')}:{});
+        hold(.22+rnd(250)/1000); mv(end-k+j,.3,'inout',{onEnd:()=>Snd.tick()});
+      }
+    }else mv(end,dur,'out');                       // normal / fast
+    this.mode='stop';
   }
   update(now,dt){
-    let blur=0;
-    if(this.mode==='spin'){ this.pos+=SPIN_SPEED*dt; if(this.pos>1000)this.pos-=1000; blur=3; }
+    const prev=this.pos;
+    if(this.mode==='spin'){ this.pos+=SPIN_SPEED*dt; if(this.pos>1000)this.pos-=1000; }
     else if(this.mode==='stop'){
-      const t=Math.min(1,(now-this.t0)/(this.dur*1000)), inv=1-t;   // dur は秒
-      this.pos=this.start+(this.end-this.start)*(1-inv*inv*inv);
-      blur=Math.min(3,3*(this.end-this.start)/this.dur*inv*inv/SPIN_SPEED*3);
-      const f=Math.floor(this.pos); if(f!==this.lastFloor){ this.lastFloor=f; if(t<1) Snd.tick(); }
-      if(t>=1){ this.pos=this.end%10; this.mode='done'; blur=0; this.render(0); const cb=this.cb; this.cb=null; cb&&cb(); return; }
+      if(!this.cur){
+        const sg=this.segs.shift();
+        if(sg){ this.cur=sg; sg.t0=now; sg.from=this.pos; sg.onStart&&sg.onStart(); }
+      }
+      if(this.cur){
+        const sg=this.cur, t=Math.min(1,(now-sg.t0)/(sg.dur*1000));
+        if(sg.type==='move') this.pos=sg.from+(sg.to-sg.from)*EASE[sg.ease](t);
+        if(t>=1){ if(sg.type==='move') this.pos=sg.to; this.cur=null; sg.onEnd&&sg.onEnd(); }
+      }
+      if(!this.cur && !this.segs.length){
+        this.pos=((this.end%10)+10)%10; this.mode='done'; this.render(0);
+        const cb=this.cb; this.cb=null; cb&&cb(); return;
+      }
+      const f=Math.floor(this.pos); if(f!==this.lastFloor){ this.lastFloor=f; Snd.tick(); }
     } else return;
-    this.render(blur);
+    const speed=Math.abs(this.pos-prev)/Math.max(dt,.001);   // 速さに応じてブラー
+    this.render(Math.min(3,Math.max(0,(speed-3)/11*3)));
   }
   render(blur){
     const idx=((-this.pos)%10+10)%10;      // pos が増えるほど数字は上→下へ流れる
@@ -393,17 +434,26 @@ function draw(){
   // 止まるまでの総時間 = 基本時間 × 0.5〜1.6倍のランダム
   const T=Math.min(45,Math.max(4,S.base*(0.5+rnd(1101)/1000)));
   const D1=Math.min(3.4,T*.5)*1000, lastAt=T*1000-D1, firstAt=lastAt*.5;
+  // パチンコ風の「ひっかけ」演出：桁ごとに一定確率でランダムに発生（毎回ではない）
+  const pick=last=>{
+    if(FORCE) return FORCE;                            // テスト用
+    if(rnd(100)>=(last?25:35)) return 'normal';
+    const r=rnd(100); return r<30?'restart':r<55?'back':r<80?'crawl':'fast';
+  };
+  let done=0;
   reels.forEach((r,i)=>{
-    const last=i===reels.length-1, at=last?lastAt:firstAt;
+    const last=i===reels.length-1, v=pick(last);
+    let at=last?lastAt:firstAt, dur=last?D1/1000:Math.min(1.5,lastAt/1000*.6);
+    if(v==='fast'){ dur=.55; at=last?Math.max(firstAt+900,lastAt*.55):Math.max(500,firstAt*.35); }
     if(last){                                           // 最後の桁の前に煽り
       setTimeout(()=>{ setCaption('最後の1桁は…！？','suspense'); Snd.suspense();
         setTimeout(()=>Snd.suspense(),520); setTimeout(()=>Snd.suspense(),1040); },Math.max(0,at-1400));
     }
-    setTimeout(()=>r.stop(+s[i], last?D1/1000:Math.min(1.5,lastAt/1000*.6), ()=>{
-      Snd.thump();
-      if(!last) setCaption(s.slice(0,i+1).padEnd(width,'?').split('').join(' '));
-      else reveal(n);
-    }),at);
+    setTimeout(()=>r.stop(+s[i],dur,()=>{
+      Snd.thump(); done++;
+      if(done===reels.length) reveal(n);
+      else if(!last) setCaption(s.slice(0,i+1).padEnd(width,'?').split('').join(' '));
+    },v),at);
   });
 }
 
@@ -479,7 +529,7 @@ addEventListener('keydown',e=>{
 });
 
 load(); init(); fitBar(); requestAnimationFrame(frame);
-window.__lottery={draw,state:()=>S};
+window.__lottery={force:v=>{FORCE=v;},draw,state:()=>S};
 })();
 </script>
 </body>
