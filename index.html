@@ -131,6 +131,23 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
 @keyframes slide{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
 .history .note{font-size:min(1.8vh,1vw);opacity:.5;margin-top:.6vh;text-align:center}
 
+/* 暗転（スポットライト）：最後の1桁の前に周りを暗くする */
+.title,.prize,.remain,.hint,.history,.bg{transition:opacity .7s}
+body.dim .title,body.dim .prize,body.dim .remain,body.dim .hint,body.dim .history{opacity:.1}
+body.dim .bg{opacity:.12}
+body.dim .machine{box-shadow:0 0 0 .6vmin #7a4a0a,0 0 14vh 5vh rgba(255,213,74,.6);animation:heart .9s ease-in-out infinite}
+@keyframes heart{0%,100%{transform:scale(1)}15%{transform:scale(1.025)}30%{transform:scale(1)}45%{transform:scale(1.015)}}
+/* リーチ */
+.machine.reach{box-shadow:0 0 0 .6vmin #7a0a1c,0 0 9vh 3vh rgba(255,40,70,.75)}
+.machine.reach .lights::before,.machine.reach .lights::after{animation-duration:.12s}
+.machine.buzz{animation:shake .5s 2}
+/* カットイン */
+#cutin{position:fixed;left:0;right:0;top:34%;height:24vh;z-index:18;pointer-events:none;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(90deg,transparent,rgba(232,38,90,.94) 12%,rgba(255,110,40,.94) 50%,rgba(232,38,90,.94) 88%,transparent);
+  font-size:15vh;font-weight:900;letter-spacing:.1em;color:#fff;white-space:nowrap;
+  text-shadow:0 0 30px #ffd54a,.5vh .5vh 0 #7d0a28;transform:translateX(-110%) skewX(-12deg)}
+#cutin.go{animation:cut 1.9s cubic-bezier(.2,.8,.2,1)}
+@keyframes cut{0%{transform:translateX(-110%) skewX(-12deg)}18%,78%{transform:translateX(0) skewX(-12deg)}100%{transform:translateX(110%) skewX(-12deg)}}
 #fx{position:fixed;inset:0;pointer-events:none;z-index:20;width:100%;height:100%}
 #flash{position:fixed;inset:0;pointer-events:none;z-index:19;background:#fff;opacity:0}
 #flash.go{animation:flash .9s ease-out}
@@ -183,6 +200,7 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
 
 <canvas id="fx"></canvas>
 <div id="flash"></div>
+<div id="cutin"></div>
 
 <script>
 (() => {
@@ -193,7 +211,7 @@ const SPIN_SPEED = 14;            // リールの回転速度（桁/秒）
 
 /* ============ 状態 ============ */
 let S = { title:'令和8年度収穫祭 大抽選会', start:1, end:30, label:'', base:8, fakeFrom:6, fakeMax:10, drawn:[] };   // drawn: [{n,label,absent}]
-let FORCE = null;
+let FORCE = null, FORCEN = null;
 let width = 2, reels = [], spinning = false, soundOn = true;
 
 function load(){
@@ -253,6 +271,22 @@ const Snd = {
     this.tone(180,t,.5,'sawtooth',.12,900); this.noise(t,.4,.12,'highpass',3000); },
   thump(v=1){ if(!this.ok())return; const t=this.ctx.currentTime;
     this.tone(170,t,.28,'sine',.6*v,45); this.noise(t,.06,.2*v,'lowpass',1200); },
+  rumble(){ if(!this.ok())return; const t=this.ctx.currentTime; this.noise(t,.9,.45,'lowpass',160,1); this.tone(55,t,.9,'sawtooth',.25,40); },
+  reach(){ if(!this.ok())return; const t=this.ctx.currentTime;
+    this.tone(440,t,.16,'square',.13); this.tone(660,t+.16,.16,'square',.13); this.tone(880,t+.32,.5,'square',.14);
+    this.noise(t,.6,.2,'bandpass',1500,.8,true); },
+  cutin(){ if(!this.ok())return; const t=this.ctx.currentTime;
+    this.noise(t,.5,.4,'highpass',3500); this.tone(90,t,.6,'sawtooth',.3,45);
+    [220,277.2,329.6,440].forEach(f=>this.tone(f,t+.12,.9,'sawtooth',.09)); this.taiko(t+.1,.9); },
+  fakewin(){ if(!this.ok())return; const t=this.ctx.currentTime;
+    [523.25,659.25,783.99,1046.5].forEach((f,i)=>this.tone(f,t+i*.1,.25,'square',.11)); this.noise(t+.3,.8,.2,'bandpass',2500,.7,true); },
+  buzzer(){ if(!this.ok())return; const t=this.ctx.currentTime;      // 「ブッブー」
+    this.tone(150,t,.28,'sawtooth',.28); this.tone(150,t+.36,.5,'sawtooth',.28); this.tone(155,t,.28,'square',.1); this.tone(155,t+.36,.5,'square',.1); },
+  zorome(){ if(!this.ok())return; const t=this.ctx.currentTime;      // ゾロ目ボーナス
+    for(let i=0;i<14;i++) this.taiko(t+i*.065,.35+i*.04);
+    this.tone(300,t,1.2,'sawtooth',.12,2400);
+    for(let i=0;i<24;i++) this.tone(1318.5*Math.pow(2,(i%5)/5*(i<12?1:2)),t+1.6+i*.07,.5,'sine',.07);
+    this.noise(t+1.3,2.2,.35,'highpass',6000); },
   fake(){ if(!this.ok())return; const t=this.ctx.currentTime;     // 「ピロッ！」動き出し予告
     this.tone(500,t,.22,'square',.1,1500); this.tone(1000,t+.08,.2,'triangle',.08,2000); },
   suspense(){ if(!this.ok())return; const t=this.ctx.currentTime;   // ドン…ドン… 心臓音
@@ -325,6 +359,11 @@ class Reel{
         mv(end-k+j-.4,.7+rnd(400)/1000,'sine',j===1?{onStart:()=>setCaption('じり…じり…','suspense')}:{});
         hold(.22+rnd(250)/1000); mv(end-k+j,.3,'inout',{onEnd:()=>Snd.tick()});
       }
+    }else if(variant==='bounce'){                 // 行き過ぎてビヨヨンと跳ね返る
+      mv(end+.35,dur,'out',{onEnd:()=>Snd.thump(.7)}); mv(end-.18,.2,'inout'); mv(end+.08,.14,'inout'); mv(end,.12,'inout');
+    }else if(variant==='wobble'){                 // 狙いの手前でブルブル震える
+      mv(end-.4,dur*.9,'out',{onEnd:()=>{Snd.rumble();setCaption('ブルブル…！？','suspense');}});
+      [.3,-.25,.2,-.12,.06].forEach(a=>mv(end+a,.1,'inout')); mv(end,.1,'inout');
     }else if(variant==='park'){                   // 1つ手前で止まって待機 → release() で1つ動く
       mv(end-1,dur,'out',{onEnd:soft}); this.segs.push({type:'wait'});
     }else mv(end,dur,'out');                       // normal / fast
@@ -429,62 +468,114 @@ function frame(now){
 const cap=$('caption'), machine=$('machine'), btn=$('drawBtn');
 function setCaption(t,cls=''){ cap.className='caption '+cls; cap.textContent=t; }
 
+const cutin=$('cutin');
+function showCutin(){
+  const T=['激アツ！！','チャンス！','キタキタキタ！','予感…！','熱い！！'];
+  cutin.textContent=T[rnd(T.length)]; cutin.classList.remove('go'); void cutin.offsetWidth; cutin.classList.add('go');
+  Snd.cutin();
+}
 function draw(){
   if(spinning) return;
   const p=pool(); if(!p.length) return;
   Snd.init();
-  const n=p[rnd(p.length)], s=pad(n);          // 先に当選番号を確定
+  const n=(FORCEN!=null&&p.includes(FORCEN))?FORCEN:p[rnd(p.length)], s=pad(n);   // 先に当選番号を確定
   spinning=true; btn.disabled=true; btn.classList.remove('ready'); btn.textContent='抽選中…';
-  machine.classList.remove('idle','win'); machine.classList.add('spinning');
+  machine.classList.remove('idle','win','reach','buzz'); machine.classList.add('spinning');
+  document.body.classList.remove('dim');
   setCaption('回転中…ドキドキ！'); $('prize').textContent=S.label;
   Snd.start(); reels.forEach(r=>r.spin()); rollStart=performance.now(); nextRoll=0;
 
   // 止まるまでの総時間 = 基本時間 × 0.5〜1.6倍のランダム
   const T=Math.min(45,Math.max(4,S.base*(0.5+rnd(1101)/1000)));
   const D1=Math.min(3.4,T*.5)*1000, lastAt=T*1000-D1, firstAt=lastAt*.5;
-  // パチンコ風の「ひっかけ」演出：開始回数以降に発生し、終盤ほど起こりやすくなる
-  const rv=()=>{ const r=rnd(100); return r<30?'restart':r<55?'back':r<80?'crawl':'fast'; };
+
+  // ---- 演出プラン：開始回数以降に発生し、終盤ほど起こりやすくなる ----
+  const idx=S.drawn.length+1, active=idx>=S.fakeFrom;
+  const prog=S.fakeMax<=S.fakeFrom?1:Math.min(1,Math.max(0,(idx-S.fakeFrom)/(S.fakeMax-S.fakeFrom)));
+  const rv=()=>{ const r=rnd(100); return r<20?'restart':r<38?'back':r<56?'crawl':r<70?'fast':r<85?'bounce':'wobble'; };
+  const NORM=['normal','normal'];
   const plan=(()=>{
-    const idx=S.drawn.length+1, N={kind:'normal',v:['normal','normal']};
-    if(idx<S.fakeFrom) return N;
-    if(FORCE) return ['together','nudge'].includes(FORCE)?{kind:FORCE,v:['normal','normal']}:{kind:'reel',v:[FORCE,FORCE]};  // テスト用
-    const prog=S.fakeMax<=S.fakeFrom?1:Math.min(1,(idx-S.fakeFrom)/(S.fakeMax-S.fakeFrom));
-    if(rnd(1000)>=(.25+.6*prog)*1000) return N;       // 発生率：25% → 85%
+    if(!active) return {kind:'normal',v:NORM};
+    if(FORCE){
+      if(FORCE==='nudge') return {kind:'nudge',v:['park','normal']};
+      if(['together','fakewin'].includes(FORCE)) return {kind:FORCE,v:NORM};
+      if(['dim','cutin'].includes(FORCE)) return {kind:'normal',v:NORM};
+      return {kind:'reel',v:[FORCE,FORCE]};                                  // テスト用
+    }
+    if(rnd(1000)>=(.25+.6*prog)*1000) return {kind:'normal',v:NORM};          // 発生率 25% → 85%
     const r=rnd(100);
-    if(r<26) return {kind:'reel',v:[rv(),'normal']};   // 1桁目だけ
-    if(r<42) return {kind:'reel',v:['normal',rv()]};   // 2桁目だけ
-    if(r<52) return {kind:'reel',v:[rv(),rv()]};       // 両方
-    if(r<76) return {kind:'together',v:['normal','normal']};   // 同時に止まる
-    return {kind:'nudge',v:['park','normal']};         // 2桁目が止まると同時に1桁目が1つ動く
+    if(r<22) return {kind:'reel',v:[rv(),'normal']};         // 1桁目だけ
+    if(r<36) return {kind:'reel',v:['normal',rv()]};         // 2桁目だけ
+    if(r<46) return {kind:'reel',v:[rv(),rv()]};             // 両方
+    if(r<64) return {kind:'together',v:NORM};                // 同時に止まる
+    if(r<88) return {kind:'nudge',v:['park','normal']};      // 2桁目が止まると同時に1桁目が1つ動く
+    return prog>=.35?{kind:'fakewin',v:NORM}:{kind:'together',v:NORM};   // フェイク当選（中盤以降）
   })();
-  let done=0;
+  // 画面演出（当選結果とは無関係の飾り）：暗転・カットイン
+  const useDim=active&&(FORCE==='dim'||(!FORCE&&rnd(100)<10+25*prog));
+  const useCut=active&&(FORCE==='cutin'||(!FORCE&&rnd(100)<12+28*prog));
+  if(useCut) setTimeout(()=>{ if(spinning) showCutin(); },lastAt*(.12+rnd(25)/100));
+
+  // フェイク当選用の「ウソの番号」
+  let fk=n;
+  if(plan.kind==='fakewin'){
+    const lo=S.end>S.start?S.start:1, hi=S.end>S.start?S.end:99;
+    do{ fk=lo+rnd(hi-lo+1); }while(fk===n);
+  }
+  let fakePhase=plan.kind==='fakewin', done=0;
+  const zoro=s[0]===s[1];
+
+  const suspenseFx=()=>{
+    setCaption(plan.kind==='together'?'せーの…！？':(zoro&&!fakePhase?'ゾロ目になるか…！？':'最後の1桁は…！？'),'suspense');
+    Snd.suspense(); setTimeout(()=>Snd.suspense(),520); setTimeout(()=>Snd.suspense(),1040);
+    if(useDim) document.body.classList.add('dim');
+  };
+  const cbFor=i=>()=>{
+    const last=i===reels.length-1;
+    Snd.thump();
+    if(last&&plan.kind==='nudge'&&!fakePhase) reels[0].release();   // 2桁目が止まった瞬間に1桁目が動く
+    done++;
+    if(done===reels.length){ fakePhase?fakeFlow():reveal(n); }
+    else if(!last){
+      if(zoro&&!fakePhase){ setCaption('リーチ！！','suspense'); machine.classList.add('reach'); Snd.reach(); }
+      else setCaption(s.slice(0,i+1).padEnd(width,'?').split('').join(' '));
+    }
+  };
+  // フェイク当選：いったん偽の番号で当選っぽく止める→「ブッブー」→再回転
+  const fakeFlow=()=>{
+    document.body.classList.remove('dim'); machine.classList.add('win');
+    setCaption(`🎉 ${pad(fk)} 番　当選！？ 🎉`,'win'); Snd.fakewin();
+    setTimeout(()=>{ machine.classList.remove('win'); machine.classList.add('buzz'); setCaption('…と思った？','suspense'); Snd.buzzer(); },1600);
+    setTimeout(()=>{
+      machine.classList.remove('buzz'); setCaption('まだまだ！本番はここから！','suspense');
+      fakePhase=false; done=0; Snd.start(); reels.forEach(r=>r.spin()); rollStart=performance.now(); nextRoll=0;
+      setTimeout(()=>reels[0].stop(+s[0],1.4,cbFor(0)),1200);
+      setTimeout(suspenseFx,1800);
+      setTimeout(()=>reels[1].stop(+s[1],3,cbFor(1)),2500);
+    },2900);
+  };
+
+  const digits=fakePhase?pad(fk):s;
   reels.forEach((r,i)=>{
     const last=i===reels.length-1, v=plan.v[i];
     let at=last?lastAt:firstAt, dur=last?D1/1000:Math.min(1.5,lastAt/1000*.6);
-    if(plan.kind==='together'){ at=lastAt; dur=D1/1000; }              // 両桁を同時に減速・停止
+    if(plan.kind==='together'||fakePhase){ at=lastAt; dur=D1/1000; }          // 両桁を同時に減速・停止
     if(v==='fast'){ dur=.55; at=last?Math.max(firstAt+900,lastAt*.55):Math.max(500,firstAt*.35); }
-    if(last){                                           // 最後の桁の前に煽り
-      setTimeout(()=>{ setCaption(plan.kind==='together'?'せーの…！？':'最後の1桁は…！？','suspense'); Snd.suspense();
-        setTimeout(()=>Snd.suspense(),520); setTimeout(()=>Snd.suspense(),1040); },Math.max(0,at-1400));
-    }
-    setTimeout(()=>r.stop(+s[i],dur,()=>{
-      Snd.thump();
-      if(last && plan.kind==='nudge') reels[0].release();   // 2桁目が止まった瞬間に1桁目が動く
-      done++;
-      if(done===reels.length) reveal(n);
-      else if(!last) setCaption(s.slice(0,i+1).padEnd(width,'?').split('').join(' '));
-    },v),at);
+    if(last) setTimeout(suspenseFx,Math.max(0,at-1400));
+    setTimeout(()=>r.stop(+digits[i],dur,cbFor(i),v),at);
   });
 }
 
 function reveal(n){
   spinning=false;
   S.drawn.push({n,label:S.label,absent:false}); save();
-  machine.classList.remove('spinning'); machine.classList.add('win');
-  setCaption(`🎉 ${pad(n)} 番　当選！ 🎉`,'win');
+  const z=pad(n)[0]===pad(n)[1];
+  document.body.classList.remove('dim'); machine.classList.remove('spinning','reach','buzz'); machine.classList.add('win');
+  setCaption(z?`🎉 ${pad(n)}　ゾロ目！！ 🎉`:`🎉 ${pad(n)} 番　当選！ 🎉`,'win');
   Snd.fanfare(); celebrate();
+  if(z){ Snd.zorome(); setTimeout(celebrate,1700); setTimeout(celebrate,3400); }   // ゾロ目ボーナス：紙吹雪を追加
   const f=$('flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
-  setTimeout(()=>machine.classList.remove('win'),4500);
+  setTimeout(()=>machine.classList.remove('win'),z?6500:4500);
   renderHist(); updateBtn();
 }
 
@@ -551,7 +642,7 @@ addEventListener('keydown',e=>{
 });
 
 load(); init(); fitBar(); requestAnimationFrame(frame);
-window.__lottery={force:v=>{FORCE=v;},draw,state:()=>S};
+window.__lottery={force:v=>{FORCE=v;},forceN:v=>{FORCEN=v;},draw,state:()=>S};
 })();
 </script>
 </body>
