@@ -224,7 +224,7 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
 body.loaded .setup{display:none}
 body:not(.loaded) #drawBtn,body:not(.loaded) .remain{display:none}
 #hist .num.name{min-width:0;font-size:.8em;flex:0 1 auto}
-/* 暗転（スポットライト）：最後の1桁の前に周りを暗くする */
+/* 暗転（スポットライト）：止まる直前に周りを暗くする */
 .title,.remain,.history,.bg{transition:opacity .7s}
 body.dim .title,body.dim .remain,body.dim .history{opacity:.1}
 body.dim .bg{opacity:.12}
@@ -242,12 +242,6 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
 #flash{position:fixed;inset:0;pointer-events:none;z-index:19;background:var(--flash);opacity:0}
 #flash.go{animation:flash .9s ease-out}
 @keyframes flash{0%{opacity:.95}100%{opacity:0}}
-
-@media (max-width:800px){
-  main{grid-template-columns:1fr;grid-template-rows:1fr 20vh}
-  .history{padding:.5rem}
-  #hist li{font-size:16px}
-}
 </style>
 </head>
 <body class="hideBar">     <!-- 全画面運用が前提：設定バーは初期状態で非表示（H キーか右上の「⚙ 設定」で表示） -->
@@ -411,7 +405,7 @@ const Snd = {
     const n=Math.floor(dur*30);
     for(let i=0;i<n;i++){ const k=i/n; if(Math.random()<1-k*.65) this.noise(t+k*dur+Math.random()*.03,.03+Math.random()*.03,.11*(1-k*.6)+.02,'bandpass',R(1500,4500),1.2); }
     this.noise(t,dur,.1,'bandpass',1400,.4,true); },
-  numhit(){ if(!this.ok())return; const t=this.ctx.currentTime;          // 番号が決まった「ジャン！」
+  numhit(){ if(!this.ok())return; const t=this.ctx.currentTime;          // 当選者が決まった「ジャン！」
     this.taiko(t,.9); [523.25,659.25,783.99].forEach(f=>this.tone(f,t,.7,'sawtooth',.1)); this.noise(t,.9,.25,'highpass',5000); },
   fake(){ if(!this.ok())return; const t=this.ctx.currentTime;     // 「ピロッ！」動き出し予告
     this.tone(500,t,.22,'square',.1,1500); this.tone(1000,t+.08,.2,'triangle',.08,2000); },
@@ -662,7 +656,7 @@ function showPrizeIdle(text){ setPrizeReel([text]).set(0); }
 const cap=$('caption'), machine=$('machine'), btn=$('drawBtn');
 function setCaption(t,cls=''){ cap.className='caption '+cls; cap.textContent=t; }
 
-/* 演出確率：開始回の fx0% → 最後の抽選の fx1% へ直線的に上がる（prog=0〜1） */
+/* 演出確率：演出が始まる回（FX_FROM）の fx0% → 最後の抽選の fx1% へ直線的に上がる（prog=0〜1） */
 const fxProb=prog=>(S.fx0+(S.fx1-S.fx0)*prog)/100;
 // 演出の進行度 0〜1：演出効果が始まる回（FX_FROM）=0、最後の抽選（参加者数と景品数の小さい方）=1
 function drawProgress(){
@@ -694,7 +688,7 @@ function draw(){
   const T=Math.min(45,Math.max(4,S.base*(0.5+rnd(1101)/1000)));
   const D1=Math.min(3.4,T*.5)*1000, stopAt=T*1000-D1;
 
-  // ---- 演出：開始回以降に発生し、終盤ほど起こりやすくなる ----
+  // ---- 演出：3回目（FX_FROM）以降に発生し、終盤ほど起こりやすくなる ----
   const active=S.drawn.length+1>=FX_FROM, prog=drawProgress();
   const roll=()=>{                                   // 戻り値：v＝止まり方 / fake＝フェイク当選 / dim＝暗転
     const N={v:'normal',fake:false,dim:false};
@@ -892,7 +886,7 @@ function parseCSV(text){
 function parsePrizes(text){
   const toHalf=t=>t.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).trim();
   const rows=parseCSV(text).map(r=>r.map(x=>x.trim())).filter(r=>r[0]);
-  if(rows.length){                                   // 見出し行（2列目が数字でない、または「景品名」等）は読み飛ばす
+  if(rows.length){                                   // 見出し行（2列目が数字でない／1列目が「景品名」等）は読み飛ばす
     const r=rows[0], q=r[1]!==undefined&&r[1]!==''?toHalf(r[1]):'';
     if((q&&!/^\d+$/.test(q))||/^(景品名?|品名|名称|name|prize)$/i.test(r[0])) rows.shift();
   }
@@ -954,6 +948,8 @@ $('btnSound').onclick=()=>setSound(!soundOn);
 $('btnFull').onclick=toggleFull;
 $('btnHide').onclick=toggleBar; $('showBar').onclick=toggleBar;
 $('btnReset').onclick=()=>{ if(spinning)return; if(confirm('抽選履歴をすべてリセットして、最初からやり直しますか？（CSVはそのまま残ります）')){ S.drawn=[]; save(); init(); } };
+// ボタン等をクリックした後にフォーカスが残ると、Space で別の操作が走ってしまうので、クリック後にフォーカスを外す
+addEventListener('click',e=>{ const t=e.target.closest('button,input[type=checkbox]'); if(t) t.blur(); });
 addEventListener('keydown',e=>{
   if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
   if(e.code==='Space'||e.code==='Enter'){ e.preventDefault(); draw(); }
