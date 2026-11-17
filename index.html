@@ -167,7 +167,7 @@ body.dim .machine{box-shadow:0 0 0 .6vmin #7a4a0a,0 0 14vh 5vh rgba(255,213,74,.
   <h1>🎊 抽選スロット</h1>
   <label>タイトル <input id="inTitle" type="text" value="令和8年度収穫祭 大抽選会"></label>
   <label>クジ番号 <input id="inStart" type="number" min="1" max="99" value="1"> 〜 <input id="inEnd" type="number" min="1" max="99" value="30"></label>
-  <label title="ひっかけ演出は、この回数目の抽選から起こり始め、「最大」の回数目に向けて少しずつ起こりやすくなります（「最大」以降は最高確率）">ひっかけ <input id="inFake" type="number" min="1" max="99" step="1" value="6">回目〜 最大<input id="inFakeMax" type="number" min="1" max="99" step="1" value="10">回目</label>
+  <label title="ひっかけ演出は、この回数目の抽選から起こり始め、最後の抽選（クジ番号の総数）に向けて少しずつ起こりやすくなります">ひっかけ <input id="inFake" type="number" min="1" max="99" step="1" value="6">回目〜</label>
   <label title="スタートから止まるまでの基本時間。実際は毎回ランダムで約0.5〜1.6倍になります">基本時間 <input id="inBase" type="number" min="4" max="30" step="1" value="8">秒</label>
   <label>賞の名前 <input id="inLabel" type="text" placeholder="例：豪華景品"></label>
   <button id="btnApply" title="番号の範囲を反映（抽選履歴はリセット）">設定を反映</button>
@@ -210,15 +210,14 @@ const STORE = 'nenkai-lottery-v1';
 const SPIN_SPEED = 14;            // リールの回転速度（桁/秒）
 
 /* ============ 状態 ============ */
-let S = { title:'令和8年度収穫祭 大抽選会', start:1, end:30, label:'', base:8, fakeFrom:6, fakeMax:10, drawn:[] };   // drawn: [{n,label,absent}]
+let S = { title:'令和8年度収穫祭 大抽選会', start:1, end:30, label:'', base:8, fakeFrom:6, drawn:[] };   // drawn: [{n,label,absent}]
 let FORCE = null, FORCEN = null;
 let width = 2, reels = [], spinning = false, soundOn = true;
 
 function load(){
   try{ const o = JSON.parse(localStorage.getItem(STORE)); if(o && o.drawn) S = Object.assign(S,o); }catch(e){}
   S.end = Math.min(99,S.end); S.start = Math.max(1,Math.min(S.start,S.end));   // 00は除外
-  S.fakeFrom = Math.min(99,Math.max(1,parseInt(S.fakeFrom,10)||6));
-  S.fakeMax = Math.min(99,Math.max(1,parseInt(S.fakeMax,10)||10)); S.base = Math.min(30,Math.max(4,+S.base||8));
+  S.fakeFrom = Math.min(99,Math.max(1,parseInt(S.fakeFrom,10)||6)); S.base = Math.min(30,Math.max(4,+S.base||8));
 }
 function save(){ try{ localStorage.setItem(STORE, JSON.stringify(S)); }catch(e){} }
 const pad = n => String(n).padStart(width,'0');
@@ -491,7 +490,8 @@ function draw(){
 
   // ---- 演出プラン：開始回数以降に発生し、終盤ほど起こりやすくなる ----
   const idx=S.drawn.length+1, active=idx>=S.fakeFrom;
-  const prog=S.fakeMax<=S.fakeFrom?1:Math.min(1,Math.max(0,(idx-S.fakeFrom)/(S.fakeMax-S.fakeFrom)));
+  const total=S.end-S.start+1;                       // 抽選回数 = クジ番号の総数
+  const prog=total<=S.fakeFrom?1:Math.min(1,Math.max(0,(idx-S.fakeFrom)/(total-S.fakeFrom)));
   const rv=()=>{ const r=rnd(100); return r<20?'restart':r<38?'back':r<56?'crawl':r<70?'fast':r<85?'bounce':'wobble'; };
   const NORM=['normal','normal'];
   const plan=(()=>{
@@ -607,7 +607,7 @@ function applySettings(force){
 }
 function init(){
   $('inStart').value=S.start; $('inEnd').value=S.end; $('inTitle').value=S.title; $('title').textContent=S.title; document.title=S.title||'抽選会';
-  $('inLabel').value=S.label; $('inBase').value=S.base; $('inFake').value=S.fakeFrom; $('inFakeMax').value=S.fakeMax;
+  $('inLabel').value=S.label; $('inBase').value=S.base; $('inFake').value=S.fakeFrom;
   buildReels(); renderHist(); updateBtn();
   const lastD=S.drawn[S.drawn.length-1];
   if(lastD){ showNumber(lastD.n); machine.classList.remove('idle'); setCaption(`前回の当選：${pad(lastD.n)} 番`); }
@@ -625,7 +625,6 @@ function fitBar(){ document.documentElement.style.setProperty('--barh',document.
 btn.onclick=()=>{ draw(); btn.blur(); };
 $('btnApply').onclick=()=>applySettings(false);
 $('inFake').onchange=e=>{ S.fakeFrom=Math.min(99,Math.max(1,parseInt(e.target.value,10)||1)); e.target.value=S.fakeFrom; save(); };
-$('inFakeMax').onchange=e=>{ S.fakeMax=Math.min(99,Math.max(1,parseInt(e.target.value,10)||10)); e.target.value=S.fakeMax; save(); };
 $('inBase').onchange=e=>{ S.base=Math.min(30,Math.max(4,parseInt(e.target.value,10)||8)); e.target.value=S.base; save(); };
 $('inTitle').oninput=e=>{ S.title=e.target.value; $('title').textContent=S.title; document.title=S.title||'抽選会'; save(); };
 $('inLabel').oninput=e=>{ S.label=e.target.value; save(); if(!spinning) $('prize').textContent=S.label; };
