@@ -275,7 +275,7 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
 <header id="bar">
   <h1>🎊 抽選スロット</h1>
   <label>タイトル <input id="inTitle" type="text"></label>
-  <label title="参加者CSV：1列目＝氏名、2列目＝区分（省略可）">参加者CSV <input id="inPeople" type="file" accept=".csv,.txt,text/csv"></label><span id="peopleInfo"></span>
+  <label title="参加者CSV：1列目＝氏名、2列目＝確率（倍率。省略時は1）">参加者CSV <input id="inPeople" type="file" accept=".csv,.txt,text/csv"></label><span id="peopleInfo"></span>
   <label title="景品CSV：1列目＝景品名、2列目＝数量（省略時は1個）、3列目＝区分（「大当たり」や★を書くと当選表示が変わります。空欄は通常）">景品CSV <input id="inPrize" type="file" accept=".csv,.txt,text/csv"></label><span id="prizeInfo"></span>
   <label title="演出効果は3回目の抽選から始まります。その回での確率 → 最後の抽選での確率（0〜100%）。間は直線的に上がります。0にすると演出なし">演出確率 <input id="inFx0" type="number" min="0" max="100" step="5" value="55" style="width:4.5em">% → <input id="inFx1" type="number" min="0" max="100" step="5" value="95" style="width:4.5em">%</label>
   <label title="スタートから止まるまでの基本時間。実際は毎回ランダムで約0.5〜1.6倍になります">基本時間 <input id="inBase" type="number" min="4" max="30" step="1" value="8">秒</label>
@@ -344,8 +344,7 @@ const $ = id => document.getElementById(id);
 const STORE = 'nenkai-lottery-v1';
 const SPIN_SPEED = 14;            // リールの回転速度（項目/秒）
 const FX_FROM = 3;                // 演出効果が始まる抽選回（固定）
-const VIP_FROM = 5;               // 優先枠の人が当たり得る最初の抽選回（それより前は当たらない）
-const VIP_WEIGHT = 10;            // VIP_FROM 回目以降の、優先枠の当選しやすさ（他の人を1とした重み）
+const WEIGHT_FROM = 5;            // 重みが1より大きい人が当たり得る最初の抽選回（それより前は当たらない）
 const THEME_EVERY = 5;            // デザイン自動切替の間隔（抽選回数）
 const LAST_EXTRA_SEC = 5;         // 最後の景品の抽選だけ、当選者スロットの回転時間に足す秒数（設定に関わらず固定。景品スロットは延長しない）
 
@@ -358,7 +357,7 @@ const THEMES=[
   {id:'pop',    name:'⑤ ポップ（お祭り）',    confetti:['#ff3d7f','#ffb23d','#ffe93d','#4fd16b','#3db8ff','#a46bff']}
 ];
 // S：設定と履歴（localStorage に保存）
-//   people：参加者 [{name, vip}] / prizes：景品 [{name, qty, big}]
+//   people：参加者 [{name, w}]（w＝当選しやすさの重み。参加者CSVの2列目、省略時は1） / prizes：景品 [{name, qty, big}]
 //   ※抽選回数＝景品の総数。景品は参加者数以下を前提にしている
 //   sound・bgm：音とBGMのON/OFF（再読み込みしても保つ）
 //   fx0・fx1：演出確率（演出効果が始まる回・最後の抽選） / autoTheme：5回ごとにデザインを自動で切り替えるか
@@ -374,7 +373,7 @@ function load(){
     const o = JSON.parse(localStorage.getItem(STORE)) || {};
     for(const k of Object.keys(S)) if(k in o) S[k] = o[k];         // 想定している項目だけ引き継ぐ
   }catch(e){}
-  if(!Array.isArray(S.people)) S.people=[];
+  S.people = (Array.isArray(S.people)?S.people:[]).filter(x=>x&&x.name).map(x=>({name:x.name,w:+x.w>0?+x.w:1}));   // 旧版の保存データは重み1として扱う
   if(!Array.isArray(S.prizes)) S.prizes=[];
   S.drawn = (Array.isArray(S.drawn)?S.drawn:[]).filter(d=>d.who!==undefined);   // 旧版（数字抽選）の履歴は引き継がない
   S.autoTheme = S.autoTheme!==false;
@@ -709,23 +708,24 @@ function drawProgress(){
 }
 const rv=()=>{ const r=rnd(100); return r<20?'restart':r<38?'back':r<56?'crawl':r<70?'fast':r<85?'bounce':'wobble'; };
 
-// 当選者を選ぶ。優先枠（参加者CSVで指定）の人は、
-//   ・VIP_FROM 回目より前は当たらない（序盤で当たると不自然なため）
-//   ・VIP_FROM 回目以降は VIP_WEIGHT 倍の重みで当たりやすい
-//   ・残りの抽選回数が、まだ当たっていない優先枠の人数以下になったら、その人たちの中から必ず選ぶ（取りこぼし防止）
-// 名前スロットの見た目や画面表示は、優先枠の有無に関係なく同じ
+// 当選者を選ぶ。各人の重み w（参加者CSVの2列目の倍率。通常は1）に比例して当たりやすい。ただし重みが1より大きい人は、
+//   ・WEIGHT_FROM 回目より前は当たらない（序盤で当たると不自然なため）
+//   ・残りの抽選回数が、まだ当たっていない該当者の人数以下になったら、その人たちの中から必ず選ぶ（取りこぼし防止）
+// 名前スロットの見た目や画面表示は、重みの有無に関係なく同じ
 function pickWinner(p){
-  const pick=a=>a[rnd(a.length)];
-  const vips=p.filter(i=>S.people[i].vip), others=p.filter(i=>!S.people[i].vip);
-  if(vips.length){
+  const w=i=>S.people[i].w;
+  const weighted=a=>{                                   // 重みに比例して1人選ぶ
+    let r=rnd(1e9)/1e9*a.reduce((t,i)=>t+w(i),0);
+    for(const i of a){ r-=w(i); if(r<0) return i; }
+    return a[a.length-1];
+  };
+  const boosted=p.filter(i=>w(i)>1), rest=p.filter(i=>w(i)<=1);
+  if(boosted.length){
     const idx=S.drawn.length+1, left=prizeUnits().length;      // idx：今回が何回目か / left：今回を含む残りの抽選回数
-    if(vips.length>=left||!others.length) return pick(vips);
-    if(idx<VIP_FROM) return pick(others);
+    if(boosted.length>=left||!rest.length) return weighted(boosted);
+    if(idx<WEIGHT_FROM) return weighted(rest);
   }
-  const w=p.map(i=>S.people[i].vip?VIP_WEIGHT:1);
-  let r=rnd(w.reduce((a,x)=>a+x,0));
-  for(let k=0;k<p.length;k++){ r-=w[k]; if(r<0) return p[k]; }
-  return p[p.length-1];
+  return weighted(p);
 }
 const isLastPrize = () => prizeUnits().length===1;                  // 景品が残り1個か
 const idleCaption = () => isLastPrize()?'🔥 ラスト1個！最後の抽選です':'ボタンを押して抽選スタート！';
@@ -1035,12 +1035,13 @@ function parsePrizes(text){
   });
   return [...map].map(([name,o])=>({name,qty:o.qty,big:o.big}));
 }
-// 参加者CSVの2列目（旧形式の3列目も可）：下記の値のときだけ優先枠（誤指定を防ぐため、決まった値のみ有効）。画面には一切表示しない
-const isPriorityMark = v => v!==undefined&&/^(vip|ｖｉｐ|★|☆|○|◯|〇|1|yes|y|true|はい|招待|招待客|来賓|ゲスト)$/i.test(toHalf(v));
 function parsePeople(text){
   const rows=parseCSV(text).map(r=>r.map(x=>x.trim())).filter(r=>r[0]);
   if(rows.length&&/^(氏名|名前|参加者名?|社員名|name)$/i.test(rows[0][0])) rows.shift();   // 見出し行は読み飛ばす
-  return rows.map(r=>({name:r[0],vip:isPriorityMark(r[1])||isPriorityMark(r[2])}));
+  return rows.map(r=>{                               // 2列目＝重み（倍率）。空欄・数字でない・0以下は1
+    const w=parseFloat(toHalf(r[1]||''));
+    return {name:r[0],w:w>0?Math.min(1000,w):1};
+  });
 }
 async function readCsvFile(f){            // UTF-8／Shift_JIS（ExcelのCSV）どちらも読む
   const buf=await f.arrayBuffer();
@@ -1052,7 +1053,7 @@ async function loadCsv(f,kind){
   const text=await readCsvFile(f);
   let list=kind==='people'?parsePeople(text):parsePrizes(text);
   if(!list.length){
-    alert(kind==='people'?'参加者を読み取れませんでした。\n1列目＝氏名のCSVにしてください。'
+    alert(kind==='people'?'参加者を読み取れませんでした。\n1列目＝氏名、2列目＝確率（省略可）のCSVにしてください。'
                          :'景品を読み取れませんでした。\n1列目＝景品名、2列目＝数量（省略可）、3列目＝区分（省略可）のCSVにしてください。');
     return;
   }
