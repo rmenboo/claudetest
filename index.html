@@ -5,18 +5,95 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>令和8年度収穫祭 大抽選会</title>
 <style>
-:root{
-  --gold:#ffd54a; --gold2:#ff9f1c; --red:#e8265a; --ink:#2a0a3a;
-  --bg1:#12002b; --bg2:#4a0d52;
+/* ============ デザインテーマ（5案）：色・質感は変数で切り替え ============ */
+:root,[data-theme="gold"]{            /* 1. ゴールドカジノ */
+  --bg1:#12002b; --bg2:#4a0d52; --text:#fff; --text-shadow:0 2px 8px rgba(0,0,0,.6);
+  --gold:#ffd54a; --prize-glow:0 0 18px rgba(255,213,74,.7);
+  --title-grad:linear-gradient(#fff6c4,#ffd54a 55%,#ff9f1c); --title-fx:drop-shadow(0 0 14px rgba(255,160,40,.6)) drop-shadow(0 3px 0 rgba(90,30,0,.7));
+  --bar-bg:rgba(0,0,0,.45); --bar-text:#fff; --input-bg:#1d0b30; --input-border:#888; --btn-ui:#3b1f5c; --btn-ui-hover:#56308a;
+  --frame-bg:linear-gradient(145deg,#ffe58a,#d9902a 45%,#fff0a8 60%,#c07a14); --frame-edge:#7a4a0a;
+  --frame-shadow:0 1.5vh 4vh rgba(0,0,0,.6),0 0 6vh rgba(255,200,60,.35); --dim-glow:rgba(255,213,74,.6);
+  --lightA:#fff6a8; --lightB:#ff5a7a; --reels-bg:#3a1200;
+  --reel-bg:linear-gradient(#cdbfa6,#fffaf0 18%,#fffaf0 82%,#cdbfa6); --reel-shade:rgba(0,0,0,.55);
+  --win-reel-bg:linear-gradient(#e6c76a,#fff8d0 18%,#fff8d0 82%,#e6c76a);
+  --digit:#b3123a; --digit-font:"Arial Black","Impact","Hiragino Sans",sans-serif; --digit-fx:none;
+  --suspense:#ff8fab; --win-color:var(--gold); --win-glow:0 0 20px #ff9f1c,0 0 40px #e8265a;
+  --btn-bg:linear-gradient(#ff5a7a,#c4123f); --btn-edge:#7d0a28; --btn-text:#fff;
+  --panel-bg:rgba(0,0,0,.35); --panel-border:rgba(255,255,255,.15); --li-bg:rgba(255,255,255,.08); --li-first:linear-gradient(90deg,rgba(255,213,74,.35),rgba(255,255,255,.08));
+  --font:"Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif; --title-weight:900; --flash:#fff;
+}
+[data-theme="wa"]{                    /* 2. 和風・紅白（祝い） */
+  --bg1:#3a0008; --bg2:#a3122a; --text:#fff7e6; --text-shadow:0 2px 8px rgba(40,0,0,.8);
+  --gold:#ffe08a; --prize-glow:0 0 16px rgba(255,224,138,.7);
+  --title-grad:linear-gradient(#fffbe8,#ffe08a 55%,#e0a020); --title-fx:drop-shadow(0 0 12px rgba(255,200,80,.55)) drop-shadow(0 3px 0 rgba(60,0,0,.8));
+  --bar-bg:rgba(40,0,6,.6); --input-bg:#2a0008; --input-border:#c99; --btn-ui:#7a1020; --btn-ui-hover:#a01830;
+  --frame-bg:linear-gradient(145deg,#fffdf4,#e6dcc2 45%,#fff 60%,#d2c6a4); --frame-edge:#5a0d14;
+  --frame-shadow:0 1.5vh 4vh rgba(0,0,0,.6),0 0 6vh rgba(255,230,160,.3); --dim-glow:rgba(255,224,138,.6);
+  --lightA:#e0a020; --lightB:#e8283c; --reels-bg:#2a0000;
+  --reel-bg:linear-gradient(#cfc2a6,#fff9ee 18%,#fff9ee 82%,#cfc2a6); --reel-shade:rgba(40,0,0,.5);
+  --win-reel-bg:linear-gradient(#f0d98a,#fff6d2 18%,#fff6d2 82%,#f0d98a);
+  --digit:#16110e; --digit-font:"Yu Mincho","Hiragino Mincho ProN","MS PMincho",serif; --digit-fx:none;
+  --suspense:#ffd1a8; --win-color:#ffe08a; --win-glow:0 0 20px #ff3b3b,0 0 40px #b3001b;
+  --btn-bg:linear-gradient(#e8283c,#9a0e22); --btn-edge:#560812;
+  --panel-bg:rgba(40,0,6,.4); --panel-border:rgba(255,224,138,.3); --li-bg:rgba(255,255,255,.1); --li-first:linear-gradient(90deg,rgba(255,224,138,.4),rgba(255,255,255,.08));
+  --font:"Yu Mincho","Hiragino Mincho ProN","Hiragino Sans",serif; --title-weight:900;
+}
+[data-theme="harvest"]{               /* 3. 秋の収穫祭 */
+  --bg1:#2a1503; --bg2:#9a5614; --text:#fff3dc; --text-shadow:0 2px 8px rgba(30,10,0,.8);
+  --gold:#ffcf5a; --prize-glow:0 0 16px rgba(255,200,80,.7);
+  --title-grad:linear-gradient(#fff1b8,#ffc93a 55%,#e8780c); --title-fx:drop-shadow(0 0 12px rgba(255,150,30,.5)) drop-shadow(0 3px 0 rgba(60,25,0,.8));
+  --bar-bg:rgba(35,16,2,.6); --input-bg:#2e1706; --input-border:#b98; --btn-ui:#6b3f17; --btn-ui-hover:#8a5424;
+  --frame-bg:repeating-linear-gradient(95deg,#a66a32 0 14px,#8f5826 14px 20px,#b57b40 20px 36px,#7c4a1d 36px 40px); --frame-edge:#2d1806;
+  --frame-shadow:0 1.5vh 4vh rgba(0,0,0,.6),0 0 6vh rgba(255,170,60,.3); --dim-glow:rgba(255,190,70,.6);
+  --lightA:#ffe27a; --lightB:#ff8a3d; --reels-bg:#2b1a0a;
+  --reel-bg:linear-gradient(#cdb98f,#fff2d2 18%,#fff2d2 82%,#cdb98f); --reel-shade:rgba(40,20,0,.5);
+  --win-reel-bg:linear-gradient(#f2cf7a,#fff5c8 18%,#fff5c8 82%,#f2cf7a);
+  --digit:#c2440e; --digit-font:"Arial Black","Impact","Hiragino Sans",sans-serif; --digit-fx:none;
+  --suspense:#ffb066; --win-color:#ffd24a; --win-glow:0 0 20px #ff8a1c,0 0 40px #b33a00;
+  --btn-bg:linear-gradient(#78c850,#2f7d1f); --btn-edge:#1a4a10;
+  --panel-bg:rgba(35,16,2,.4); --panel-border:rgba(255,200,120,.25); --li-bg:rgba(255,255,255,.09); --li-first:linear-gradient(90deg,rgba(255,200,90,.4),rgba(255,255,255,.08));
+  --font:"Hiragino Maru Gothic ProN","Hiragino Sans","Yu Gothic",sans-serif; --title-weight:900;
+}
+[data-theme="neon"]{                  /* 4. ネオン */
+  --bg1:#02020a; --bg2:#1d0645; --text:#eaf6ff; --text-shadow:0 0 10px rgba(53,242,255,.5);
+  --gold:#35f2ff; --prize-glow:0 0 14px #35f2ff,0 0 30px rgba(53,242,255,.6);
+  --title-grad:linear-gradient(#c8fcff,#35f2ff 50%,#ff2bd6); --title-fx:drop-shadow(0 0 10px rgba(53,242,255,.8)) drop-shadow(0 0 24px rgba(255,43,214,.6));
+  --bar-bg:rgba(2,2,14,.75); --bar-text:#dff; --input-bg:#0a0a22; --input-border:#35f2ff; --btn-ui:#1a1050; --btn-ui-hover:#2c1a7a;
+  --frame-bg:linear-gradient(145deg,#14143a,#05050f); --frame-edge:#ff2bd6;
+  --frame-shadow:0 0 3vh 1vh rgba(255,43,214,.6),0 0 8vh rgba(53,242,255,.35); --dim-glow:rgba(53,242,255,.7);
+  --lightA:#35f2ff; --lightB:#ff2bd6; --reels-bg:#000;
+  --reel-bg:linear-gradient(#05051a,#12123a 50%,#05051a); --reel-shade:rgba(0,0,0,.75);
+  --win-reel-bg:linear-gradient(#1a0a40,#2a1060 50%,#1a0a40);
+  --digit:#35f2ff; --digit-font:"Arial Black","Impact","Hiragino Sans",sans-serif; --digit-fx:0 0 .06em #fff,0 0 .2em #35f2ff,0 0 .45em #35f2ff;
+  --suspense:#ff6be6; --win-color:#35f2ff; --win-glow:0 0 20px #35f2ff,0 0 44px #ff2bd6;
+  --btn-bg:linear-gradient(#ff2bd6,#7a0bff); --btn-edge:#3a0580;
+  --panel-bg:rgba(5,5,25,.6); --panel-border:rgba(53,242,255,.5); --li-bg:rgba(53,242,255,.08); --li-first:linear-gradient(90deg,rgba(255,43,214,.35),rgba(53,242,255,.08));
+  --font:"Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif; --title-weight:900;
+}
+[data-theme="pop"]{                   /* 5. ポップ（お祭りカラフル） */
+  --bg1:#9fdcff; --bg2:#fff0a8; --text:#2a1a4a; --text-shadow:0 2px 0 rgba(255,255,255,.9);
+  --gold:#ff3d7f; --prize-glow:0 2px 0 #fff;
+  --title-grad:linear-gradient(#ff5a7a,#ff9f1c); --title-fx:drop-shadow(3px 3px 0 #fff) drop-shadow(0 0 0 #fff) drop-shadow(0 6px 0 rgba(42,26,74,.3));
+  --bar-bg:rgba(255,255,255,.88); --bar-text:#2a1a4a; --input-bg:#fff; --input-border:#2a1a4a; --btn-ui:#ffd54a; --btn-ui-hover:#ffe27a;
+  --frame-bg:linear-gradient(135deg,#ff5a7a,#ffb23d,#ffe93d,#4fd16b,#3db8ff,#a46bff); --frame-edge:#2a1a4a;
+  --frame-shadow:0 1.5vh 0 rgba(42,26,74,.35); --dim-glow:rgba(255,61,127,.55);
+  --lightA:#ffffff; --lightB:#2a1a4a; --reels-bg:#2a1a4a;
+  --reel-bg:linear-gradient(#d8d8ee,#ffffff 18%,#ffffff 82%,#d8d8ee); --reel-shade:rgba(42,26,74,.4);
+  --win-reel-bg:linear-gradient(#ffe27a,#fffbe0 18%,#fffbe0 82%,#ffe27a);
+  --digit:#ff3d7f; --digit-font:"Hiragino Maru Gothic ProN","Arial Rounded MT Bold","Arial Black",sans-serif; --digit-fx:.04em .04em 0 #ffd54a;
+  --suspense:#7a2bff; --win-color:#ff3d7f; --win-glow:3px 3px 0 #fff,0 0 20px #fff;
+  --btn-bg:linear-gradient(#ffb23d,#f07a00); --btn-edge:#a35000;
+  --panel-bg:rgba(255,255,255,.65); --panel-border:#2a1a4a; --li-bg:rgba(255,255,255,.75); --li-first:linear-gradient(90deg,#ffe27a,#fff);
+  --font:"Hiragino Maru Gothic ProN","Yu Gothic","Meiryo",sans-serif; --title-weight:900; --flash:#fff;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{
-  font-family:"Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif;
-  color:#fff; overflow:hidden;
+  font-family:var(--font);
+  color:var(--text); overflow:hidden;
   background:radial-gradient(ellipse at 50% 30%,var(--bg2),var(--bg1) 70%);
 }
-/* きらめく背景 */
+/* きらめく背景（テーマごとに模様が変わる） */
 .bg{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.7;
   background-image:
     radial-gradient(2px 2px at 20% 30%,#fff,transparent),
@@ -28,49 +105,55 @@ body{
   background-size:300px 300px;
   animation:drift 24s linear infinite;
 }
+[data-theme="wa"] .bg{background-image:radial-gradient(circle at 50% 100%,transparent 0 36%,rgba(255,255,255,.13) 37% 40%,transparent 41% 56%,rgba(255,255,255,.11) 57% 60%,transparent 61% 76%,rgba(255,255,255,.09) 77% 80%,transparent 81%);
+  background-size:90px 45px;opacity:1;animation:none}
+[data-theme="neon"] .bg{background-image:linear-gradient(rgba(53,242,255,.16) 1px,transparent 1px),linear-gradient(90deg,rgba(53,242,255,.16) 1px,transparent 1px);
+  background-size:70px 70px;opacity:.8;animation:drift 18s linear infinite}
+[data-theme="pop"] .bg{background-image:radial-gradient(circle,rgba(255,255,255,.75) 7px,transparent 8px);background-size:64px 64px;opacity:.8}
+[data-theme="harvest"] .bg{opacity:.55}
 @keyframes drift{to{background-position:300px 600px}}
 
 #bar{
   position:relative;z-index:5;display:flex;flex-wrap:wrap;gap:.6rem 1rem;align-items:center;
-  padding:.6rem 1rem;background:rgba(0,0,0,.45);backdrop-filter:blur(4px);
-  border-bottom:1px solid rgba(255,255,255,.15);font-size:14px;
+  padding:.6rem 1rem;background:var(--bar-bg);color:var(--bar-text,var(--text));backdrop-filter:blur(4px);
+  border-bottom:1px solid rgba(255,255,255,.15);font-size:14px;font-family:"Hiragino Sans","Yu Gothic","Meiryo",system-ui,sans-serif;
 }
-#bar h1{font-size:18px;color:var(--gold);margin-right:auto;white-space:nowrap}
+#bar h1{font-size:18px;color:var(--gold);margin-right:auto;white-space:nowrap;text-shadow:none}
 #bar label{display:flex;align-items:center;gap:.4rem;white-space:nowrap}
 #bar input[type=number]{width:5.5em}
 #bar input[type=text]{width:11em}
 #bar #inTitle{width:16em}
-#bar input{padding:.35rem .5rem;border-radius:6px;border:1px solid #888;background:#1d0b30;color:#fff;font-size:14px}
-#bar button{padding:.4rem .8rem;border-radius:6px;border:1px solid rgba(255,255,255,.3);
-  background:#3b1f5c;color:#fff;cursor:pointer;font-size:14px}
-#bar button:hover{background:#56308a}
+#bar input,#bar select{padding:.35rem .5rem;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--bar-text,var(--text));font-size:14px}
+#bar button{padding:.4rem .8rem;border-radius:6px;border:1px solid rgba(128,128,128,.5);
+  background:var(--btn-ui);color:var(--bar-text,var(--text));cursor:pointer;font-size:14px}
+#bar button:hover{background:var(--btn-ui-hover)}
 body.hideBar #bar{display:none}
 body.hideBar .reel{--fs:min(calc(54vw / (var(--n) * .78)),34vh)}   /* 1920x1080：設定バーを隠すとリールを大きく */
 body.hideBar #showBar{display:block}
 #showBar{display:none;position:fixed;top:6px;right:8px;z-index:6;opacity:.25;font-size:12px;
-  background:none;border:none;color:#fff;cursor:pointer}
+  background:none;border:none;color:var(--text);cursor:pointer}
 #showBar:hover{opacity:1}
 
 main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap:1.5vw;
   height:calc(100% - var(--barh,56px));padding:1vh 1.5vw}
 .stage{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.4vh;min-width:0}
-.title{font-size:min(7vh,4.4vw);font-weight:900;letter-spacing:.12em;text-align:center;white-space:nowrap;
-  background:linear-gradient(#fff6c4,#ffd54a 55%,#ff9f1c);-webkit-background-clip:text;background-clip:text;color:transparent;
-  filter:drop-shadow(0 0 14px rgba(255,160,40,.6)) drop-shadow(0 3px 0 rgba(90,30,0,.7))}
+.title{font-size:min(7vh,4.4vw);font-weight:var(--title-weight);letter-spacing:.12em;text-align:center;white-space:nowrap;
+  background:var(--title-grad);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:var(--title-fx)}
 .prize{font-size:min(4.2vh,2.8vw);font-weight:900;color:var(--gold);letter-spacing:.1em;
-  text-shadow:0 0 18px rgba(255,213,74,.7);min-height:1.2em;text-align:center}
+  text-shadow:var(--prize-glow);min-height:1.2em;text-align:center}
 
 .machine{
   --n:2; position:relative;padding:min(2.2vh,1.4vw);border-radius:2.5vmin;
-  background:linear-gradient(145deg,#ffe58a,#d9902a 45%,#fff0a8 60%,#c07a14);
-  box-shadow:0 0 0 .6vmin #7a4a0a,0 1.5vh 4vh rgba(0,0,0,.6),0 0 6vh rgba(255,200,60,.35);
+  background:var(--frame-bg);
+  box-shadow:0 0 0 .6vmin var(--frame-edge),var(--frame-shadow);
 }
 .machine .lights::before,.machine .lights::after{
   content:"";position:absolute;inset:.5vmin;border-radius:2vmin;pointer-events:none;
   border:.9vmin dotted #fff;
 }
-.machine .lights::before{animation:blinkA .7s steps(1) infinite;border-color:#fff6a8}
-.machine .lights::after{animation:blinkA .7s steps(1) infinite reverse;border-color:#ff5a7a}
+.machine .lights::before{animation:blinkA .7s steps(1) infinite;border-color:var(--lightA)}
+.machine .lights::after{animation:blinkA .7s steps(1) infinite reverse;border-color:var(--lightB)}
 @keyframes blinkA{0%{opacity:1}50%{opacity:0}}
 .machine.spinning .lights::before,.machine.spinning .lights::after{animation-duration:.18s}
 .machine.win{animation:shake .5s 2, glow 1s ease-in-out infinite alternate}
@@ -78,54 +161,54 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
   40%{transform:translate(8px,-4px) rotate(.4deg)}60%{transform:translate(-6px,-2px)}80%{transform:translate(6px,2px)}}
 @keyframes glow{from{filter:brightness(1)}to{filter:brightness(1.25) saturate(1.3)}}
 
-.reels{position:relative;display:flex;gap:1.2vmin;padding:1.2vmin;border-radius:1.6vmin;background:#3a1200;
+.reels{position:relative;display:flex;gap:1.2vmin;padding:1.2vmin;border-radius:1.6vmin;background:var(--reels-bg);
   box-shadow:inset 0 0 2vmin #000}
 .reel{
   --fs:min(calc(54vw / (var(--n) * .78)),29vh);
   font-size:var(--fs);width:.78em;height:1.15em;overflow:hidden;position:relative;border-radius:1vmin;
-  background:linear-gradient(#cdbfa6,#fffaf0 18%,#fffaf0 82%,#cdbfa6);
+  background:var(--reel-bg);
 }
 .reel::after{content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(rgba(0,0,0,.55),transparent 22%,transparent 78%,rgba(0,0,0,.55));}
+  background:linear-gradient(var(--reel-shade),transparent 22%,transparent 78%,var(--reel-shade));}
 .strip{will-change:transform}
-.cell{height:1.15em;line-height:1.15em;text-align:center;font-weight:900;color:#b3123a;
-  font-family:"Arial Black","Impact","Hiragino Sans",sans-serif;font-variant-numeric:tabular-nums}
+.cell{height:1.15em;line-height:1.15em;text-align:center;font-weight:900;color:var(--digit);
+  font-family:var(--digit-font);font-variant-numeric:tabular-nums;text-shadow:var(--digit-fx)}
 .machine.idle .reel{opacity:.85}
-.machine.win .reel{background:linear-gradient(#e6c76a,#fff8d0 18%,#fff8d0 82%,#e6c76a)}
+.machine.win .reel{background:var(--win-reel-bg)}
 
 .caption{font-size:min(4.4vh,2.6vw);font-weight:700;min-height:1.4em;text-align:center;
-  text-shadow:0 2px 8px rgba(0,0,0,.6)}
-.caption.suspense{color:#ff8fab;animation:pulse .5s ease-in-out infinite alternate}
-.caption.win{font-size:min(8vh,5vw);color:var(--gold);font-weight:900;
-  text-shadow:0 0 20px #ff9f1c,0 0 40px #e8265a;animation:pop .6s cubic-bezier(.2,2,.4,1)}
+  text-shadow:var(--text-shadow)}
+.caption.suspense{color:var(--suspense);animation:pulse .5s ease-in-out infinite alternate}
+.caption.win{font-size:min(8vh,5vw);color:var(--win-color);font-weight:900;
+  text-shadow:var(--win-glow);animation:pop .6s cubic-bezier(.2,2,.4,1)}
 @keyframes pulse{from{transform:scale(1)}to{transform:scale(1.12)}}
 @keyframes pop{from{transform:scale(.2);opacity:0}to{transform:scale(1);opacity:1}}
 
 .draw{
   font-size:min(5vh,3vw);font-weight:900;letter-spacing:.15em;padding:1.4vh 4vw;border-radius:999px;
-  border:none;cursor:pointer;color:#fff;
-  background:linear-gradient(#ff5a7a,#c4123f);
-  box-shadow:0 .8vh 0 #7d0a28,0 1.5vh 3vh rgba(0,0,0,.5);
+  border:none;cursor:pointer;color:var(--btn-text);font-family:var(--font);
+  background:var(--btn-bg);
+  box-shadow:0 .8vh 0 var(--btn-edge),0 1.5vh 3vh rgba(0,0,0,.5);
   transition:transform .08s,box-shadow .08s;
 }
 .draw:hover:not(:disabled){filter:brightness(1.12)}
-.draw:active:not(:disabled){transform:translateY(.6vh);box-shadow:0 .2vh 0 #7d0a28}
+.draw:active:not(:disabled){transform:translateY(.6vh);box-shadow:0 .2vh 0 var(--btn-edge)}
 .draw:disabled{filter:grayscale(.8) brightness(.7);cursor:default}
 .draw.ready{animation:beat 1.1s ease-in-out infinite}
 @keyframes beat{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
 .remain{font-size:min(2.6vh,1.6vw);opacity:.85}
 .hint{font-size:min(2vh,1.2vw);opacity:.5}
 
-.history{display:flex;flex-direction:column;min-height:0;background:rgba(0,0,0,.35);
-  border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:1vh .8vw}
+.history{display:flex;flex-direction:column;min-height:0;background:var(--panel-bg);
+  border:1px solid var(--panel-border);border-radius:12px;padding:1vh .8vw}
 .history h2{font-size:min(2.6vh,1.5vw);color:var(--gold);margin-bottom:.8vh;text-align:center}
 #hist{list-style:none;overflow:auto;flex:1;display:flex;flex-direction:column;gap:.6vh}
 #hist li{display:flex;align-items:center;gap:.6em;padding:.5vh .6vw;border-radius:8px;cursor:pointer;
-  background:rgba(255,255,255,.08);font-size:min(3vh,1.8vw);animation:slide .4s ease-out}
-#hist li:first-child{background:linear-gradient(90deg,rgba(255,213,74,.35),rgba(255,255,255,.08))}
+  background:var(--li-bg);font-size:min(3vh,1.8vw);animation:slide .4s ease-out}
+#hist li:first-child{background:var(--li-first)}
 #hist .num{font-weight:900;color:var(--gold);font-variant-numeric:tabular-nums;min-width:2.4em}
 #hist .lbl{font-size:.7em;opacity:.8;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#hist .mark{display:none;font-size:.6em;background:#777;border-radius:4px;padding:0 .4em}
+#hist .mark{display:none;font-size:.6em;background:#777;color:#fff;border-radius:4px;padding:0 .4em}
 #hist li.absent .num{text-decoration:line-through;color:#999}
 #hist li.absent .mark{display:inline}
 @keyframes slide{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
@@ -135,11 +218,11 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
 .title,.prize,.remain,.hint,.history,.bg{transition:opacity .7s}
 body.dim .title,body.dim .prize,body.dim .remain,body.dim .hint,body.dim .history{opacity:.1}
 body.dim .bg{opacity:.12}
-body.dim .machine{box-shadow:0 0 0 .6vmin #7a4a0a,0 0 14vh 5vh rgba(255,213,74,.6);animation:heart .9s ease-in-out infinite}
+body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--dim-glow);animation:heart .9s ease-in-out infinite}
 @keyframes heart{0%,100%{transform:scale(1)}15%{transform:scale(1.025)}30%{transform:scale(1)}45%{transform:scale(1.015)}}
 .machine.buzz{animation:shake .5s 2}
 #fx{position:fixed;inset:0;pointer-events:none;z-index:20;width:100%;height:100%}
-#flash{position:fixed;inset:0;pointer-events:none;z-index:19;background:#fff;opacity:0}
+#flash{position:fixed;inset:0;pointer-events:none;z-index:19;background:var(--flash);opacity:0}
 #flash.go{animation:flash .9s ease-out}
 @keyframes flash{0%{opacity:.95}100%{opacity:0}}
 
@@ -159,6 +242,7 @@ body.dim .machine{box-shadow:0 0 0 .6vmin #7a4a0a,0 0 14vh 5vh rgba(255,213,74,.
   <label>クジ番号 <input id="inStart" type="number" min="1" max="99" value="1"> 〜 <input id="inEnd" type="number" min="1" max="99" value="30"></label>
   <label title="ひっかけ演出は、この回数目の抽選から起こり始め、最後の抽選（クジ番号の総数）に向けて少しずつ起こりやすくなります">ひっかけ <input id="inFake" type="number" min="1" max="99" step="1" value="6">回目〜</label>
   <label title="スタートから止まるまでの基本時間。実際は毎回ランダムで約0.5〜1.6倍になります">基本時間 <input id="inBase" type="number" min="4" max="30" step="1" value="8">秒</label>
+  <label>デザイン <select id="selTheme"></select></label>
   <label>賞の名前 <input id="inLabel" type="text" placeholder="例：豪華景品"></label>
   <button id="btnApply" title="番号の範囲を反映（抽選履歴はリセット）">設定を反映</button>
   <button id="btnSound">🔊 音ON</button>
@@ -179,7 +263,7 @@ body.dim .machine{box-shadow:0 0 0 .6vmin #7a4a0a,0 0 14vh 5vh rgba(255,213,74,.
     <div class="caption" id="caption">ボタンを押して抽選スタート！</div>
     <button class="draw ready" id="drawBtn">抽選スタート！</button>
     <div class="remain" id="remain"></div>
-    <div class="hint">Space / Enter：抽選　F：全画面　H：設定の表示切替　M：音</div>
+    <div class="hint">Space / Enter：抽選　F：全画面　H：設定の表示切替　M：音　T：デザイン切替</div>
   </section>
   <aside class="history">
     <h2>🏆 当選番号</h2>
@@ -199,7 +283,14 @@ const STORE = 'nenkai-lottery-v1';
 const SPIN_SPEED = 14;            // リールの回転速度（桁/秒）
 
 /* ============ 状態 ============ */
-let S = { title:'令和8年度収穫祭 大抽選会', start:1, end:30, label:'', base:8, fakeFrom:6, drawn:[] };   // drawn: [{n,label,absent}]
+const THEMES=[
+  {id:'gold',   name:'① ゴールドカジノ',      confetti:['#ffd54a','#ff5a7a','#4fd1ff','#8dff6b','#ff9f1c','#d68bff','#fff']},
+  {id:'wa',     name:'② 和風・紅白（祝い）',  confetti:['#ffffff','#e8283c','#ffe08a','#ff7a8a','#f5c542','#fff3d6']},
+  {id:'harvest',name:'③ 秋の収穫祭',          confetti:['#ffcf5a','#f2711c','#c2440e','#78c850','#e8b04a','#fff3dc']},
+  {id:'neon',   name:'④ ネオン',              confetti:['#35f2ff','#ff2bd6','#7a0bff','#b6ff3a','#ffffff','#ffe93d']},
+  {id:'pop',    name:'⑤ ポップ（お祭り）',    confetti:['#ff3d7f','#ffb23d','#ffe93d','#4fd16b','#3db8ff','#a46bff']}
+];
+let S = { theme:'gold', title:'令和8年度収穫祭 大抽選会', start:1, end:30, label:'', base:8, fakeFrom:6, drawn:[] };   // drawn: [{n,label,absent}]
 let FORCE = null, FORCEN = null, lastFx = new Set();   // lastFx：直前の抽選で使った演出
 let width = 2, reels = [], spinning = false, soundOn = true;
 
@@ -393,7 +484,7 @@ function showNumber(n){ const s=pad(n); reels.forEach((r,i)=>r.set(+s[i])); }
 const cv=$('fx'), cx=cv.getContext('2d'); let parts=[], dpr=1;
 function resizeFx(){ dpr=Math.min(2,window.devicePixelRatio||1); cv.width=innerWidth*dpr; cv.height=innerHeight*dpr; }
 addEventListener('resize',()=>{resizeFx();fitBar();}); resizeFx();
-const COLORS=['#ffd54a','#ff5a7a','#4fd1ff','#8dff6b','#ff9f1c','#d68bff','#fff'];
+let COLORS=THEMES[0].confetti;
 function burst(x,y,n,ang,spread,power){
   for(let i=0;i<n;i++){
     const a=ang+(Math.random()-.5)*spread, v=power*(.4+Math.random()*.8);
@@ -594,6 +685,11 @@ function init(){
   else { showNumber(S.start); machine.classList.add('idle'); setCaption('ボタンを押して抽選スタート！'); }
   $('prize').textContent=S.label;
 }
+function applyTheme(id){
+  const t=THEMES.find(x=>x.id===id)||THEMES[0];
+  S.theme=t.id; document.documentElement.dataset.theme=t.id; COLORS=t.confetti;
+  $('selTheme').value=t.id; save(); fitBar();
+}
 function setSound(on){ soundOn=on; $('btnSound').textContent=on?'🔊 音ON':'🔇 音OFF'; }
 function toggleFull(){
   if(document.fullscreenElement) document.exitFullscreen();
@@ -608,6 +704,8 @@ $('inFake').onchange=e=>{ S.fakeFrom=Math.min(99,Math.max(1,parseInt(e.target.va
 $('inBase').onchange=e=>{ S.base=Math.min(30,Math.max(4,parseInt(e.target.value,10)||8)); e.target.value=S.base; save(); };
 $('inTitle').oninput=e=>{ S.title=e.target.value; $('title').textContent=S.title; document.title=S.title||'抽選会'; save(); };
 $('inLabel').oninput=e=>{ S.label=e.target.value; save(); if(!spinning) $('prize').textContent=S.label; };
+$('selTheme').innerHTML=THEMES.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+$('selTheme').onchange=e=>{ applyTheme(e.target.value); e.target.blur(); };
 $('btnSound').onclick=()=>setSound(!soundOn);
 $('btnFull').onclick=toggleFull;
 $('btnHide').onclick=toggleBar; $('showBar').onclick=toggleBar;
@@ -618,9 +716,10 @@ addEventListener('keydown',e=>{
   else if(e.key==='f'||e.key==='F') toggleFull();
   else if(e.key==='h'||e.key==='H') toggleBar();
   else if(e.key==='m'||e.key==='M') setSound(!soundOn);
+  else if(e.key==='t'||e.key==='T'){ const i=THEMES.findIndex(x=>x.id===S.theme); applyTheme(THEMES[(i+1)%THEMES.length].id); }
 });
 
-load(); init(); fitBar(); requestAnimationFrame(frame);
+load(); applyTheme(S.theme); init(); fitBar(); requestAnimationFrame(frame);
 window.__lottery={lastFx:()=>[...lastFx],force:v=>{FORCE=v;},forceN:v=>{FORCEN=v;},draw,state:()=>S};
 })();
 </script>
