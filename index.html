@@ -345,6 +345,7 @@ const STORE = 'nenkai-lottery-v1';
 const SPIN_SPEED = 14;            // リールの回転速度（項目/秒）
 const FX_FROM = 3;                // 演出効果が始まる抽選回（固定）
 const THEME_EVERY = 5;            // デザイン自動切替の間隔（抽選回数）
+const LAST_EXTRA_SEC = 5;         // 最後の景品の抽選だけ、当選者スロットの回転時間に足す秒数（設定に関わらず固定。景品スロットは延長しない）
 
 /* ============ テーマ・状態 ============ */
 const THEMES=[
@@ -728,8 +729,8 @@ function draw(){
   Snd.start(); reels[0].spin(); rollStart=performance.now(); nextRoll=0;
   if(lastOne){ showLastBanner(); Snd.lastOne(); }     // 「LAST ONE」の帯と効果音
 
-  // 止まるまでの時間 = 基本時間 × 0.5〜1.6倍のランダム
-  const T=Math.min(45,Math.max(4,S.base*(0.5+rnd(1101)/1000)));
+  // 当選者スロットが止まるまでの時間 = 基本時間 × 0.5〜1.6倍のランダム。最後の景品の抽選だけは「基本時間＋LAST_EXTRA_SEC」で固定
+  const T=lastOne?S.base+LAST_EXTRA_SEC:Math.min(45,Math.max(4,S.base*(0.5+rnd(1101)/1000)));
   const D1=Math.min(3.4,T*.5)*1000, stopAt=T*1000-D1;
 
   // ---- 演出：3回目（FX_FROM）以降に発生し、終盤ほど起こりやすくなる ----
