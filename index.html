@@ -357,7 +357,7 @@ const THEMES=[
   {id:'pop',    name:'⑤ ポップ（お祭り）',    confetti:['#ff3d7f','#ffb23d','#ffe93d','#4fd16b','#3db8ff','#a46bff']}
 ];
 // S：設定と履歴（localStorage に保存）
-//   people：参加者 [{name, w}]（w＝当選しやすさの重み。参加者CSVの2列目、省略時は1） / prizes：景品 [{name, qty, big}]
+//   people：参加者 [{name, w}]（w＝当選しやすさの重み。参加者CSVの2列目。1以上、省略時は1） / prizes：景品 [{name, qty, big}]
 //   ※抽選回数＝景品の総数。景品は参加者数以下を前提にしている
 //   sound・bgm：音とBGMのON/OFF（再読み込みしても保つ）
 //   fx0・fx1：演出確率（演出効果が始まる回・最後の抽選） / autoTheme：5回ごとにデザインを自動で切り替えるか
@@ -373,7 +373,7 @@ function load(){
     const o = JSON.parse(localStorage.getItem(STORE)) || {};
     for(const k of Object.keys(S)) if(k in o) S[k] = o[k];         // 想定している項目だけ引き継ぐ
   }catch(e){}
-  S.people = (Array.isArray(S.people)?S.people:[]).filter(x=>x&&x.name).map(x=>({name:x.name,w:+x.w>0?+x.w:1}));   // 旧版の保存データは重み1として扱う
+  S.people = (Array.isArray(S.people)?S.people:[]).filter(x=>x&&x.name).map(x=>({name:x.name,w:+x.w>1?+x.w:1}));   // 旧版の保存データは重み1として扱う
   if(!Array.isArray(S.prizes)) S.prizes=[];
   S.drawn = (Array.isArray(S.drawn)?S.drawn:[]).filter(d=>d.who!==undefined);   // 旧版（数字抽選）の履歴は引き継がない
   S.autoTheme = S.autoTheme!==false;
@@ -719,7 +719,7 @@ function pickWinner(p){
     for(const i of a){ r-=w(i); if(r<0) return i; }
     return a[a.length-1];
   };
-  const boosted=p.filter(i=>w(i)>1), rest=p.filter(i=>w(i)<=1);
+  const boosted=p.filter(i=>w(i)>1), rest=p.filter(i=>w(i)===1);
   if(boosted.length){
     const idx=S.drawn.length+1, left=prizeUnits().length;      // idx：今回が何回目か / left：今回を含む残りの抽選回数
     if(boosted.length>=left||!rest.length) return weighted(boosted);
@@ -1038,9 +1038,9 @@ function parsePrizes(text){
 function parsePeople(text){
   const rows=parseCSV(text).map(r=>r.map(x=>x.trim())).filter(r=>r[0]);
   if(rows.length&&/^(氏名|名前|参加者名?|社員名|name)$/i.test(rows[0][0])) rows.shift();   // 見出し行は読み飛ばす
-  return rows.map(r=>{                               // 2列目＝重み（倍率）。空欄・数字でない・0以下は1
+  return rows.map(r=>{                               // 2列目＝重み（倍率）。1より大きい数だけ有効。空欄・数字でない・1以下は1（下げる指定は想定しない）
     const w=parseFloat(toHalf(r[1]||''));
-    return {name:r[0],w:w>0?Math.min(1000,w):1};
+    return {name:r[0],w:w>1?Math.min(1000,w):1};
   });
 }
 async function readCsvFile(f){            // UTF-8／Shift_JIS（ExcelのCSV）どちらも読む
