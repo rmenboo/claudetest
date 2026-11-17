@@ -141,13 +141,6 @@ body.dim .machine{box-shadow:0 0 0 .6vmin #7a4a0a,0 0 14vh 5vh rgba(255,213,74,.
 .machine.reach{box-shadow:0 0 0 .6vmin #7a0a1c,0 0 9vh 3vh rgba(255,40,70,.75)}
 .machine.reach .lights::before,.machine.reach .lights::after{animation-duration:.12s}
 .machine.buzz{animation:shake .5s 2}
-/* カットイン */
-#cutin{position:fixed;left:0;right:0;top:34%;height:24vh;z-index:18;pointer-events:none;display:flex;align-items:center;justify-content:center;
-  background:linear-gradient(90deg,transparent,rgba(232,38,90,.94) 12%,rgba(255,110,40,.94) 50%,rgba(232,38,90,.94) 88%,transparent);
-  font-size:15vh;font-weight:900;letter-spacing:.1em;color:#fff;white-space:nowrap;
-  text-shadow:0 0 30px #ffd54a,.5vh .5vh 0 #7d0a28;transform:translateX(-110%) skewX(-12deg)}
-#cutin.go{animation:cut 1.9s cubic-bezier(.2,.8,.2,1)}
-@keyframes cut{0%{transform:translateX(-110%) skewX(-12deg)}18%,78%{transform:translateX(0) skewX(-12deg)}100%{transform:translateX(110%) skewX(-12deg)}}
 #fx{position:fixed;inset:0;pointer-events:none;z-index:20;width:100%;height:100%}
 #flash{position:fixed;inset:0;pointer-events:none;z-index:19;background:#fff;opacity:0}
 #flash.go{animation:flash .9s ease-out}
@@ -200,7 +193,6 @@ body.dim .machine{box-shadow:0 0 0 .6vmin #7a4a0a,0 0 14vh 5vh rgba(255,213,74,.
 
 <canvas id="fx"></canvas>
 <div id="flash"></div>
-<div id="cutin"></div>
 
 <script>
 (() => {
@@ -211,7 +203,7 @@ const SPIN_SPEED = 14;            // リールの回転速度（桁/秒）
 
 /* ============ 状態 ============ */
 let S = { title:'令和8年度収穫祭 大抽選会', start:1, end:30, label:'', base:8, fakeFrom:6, drawn:[] };   // drawn: [{n,label,absent}]
-let FORCE = null, FORCEN = null;
+let FORCE = null, FORCEN = null, lastFx = new Set();   // lastFx：直前の抽選で使った演出
 let width = 2, reels = [], spinning = false, soundOn = true;
 
 function load(){
@@ -274,9 +266,6 @@ const Snd = {
   reach(){ if(!this.ok())return; const t=this.ctx.currentTime;
     this.tone(440,t,.16,'square',.13); this.tone(660,t+.16,.16,'square',.13); this.tone(880,t+.32,.5,'square',.14);
     this.noise(t,.6,.2,'bandpass',1500,.8,true); },
-  cutin(){ if(!this.ok())return; const t=this.ctx.currentTime;
-    this.noise(t,.5,.4,'highpass',3500); this.tone(90,t,.6,'sawtooth',.3,45);
-    [220,277.2,329.6,440].forEach(f=>this.tone(f,t+.12,.9,'sawtooth',.09)); this.taiko(t+.1,.9); },
   fakewin(){ if(!this.ok())return; const t=this.ctx.currentTime;
     [523.25,659.25,783.99,1046.5].forEach((f,i)=>this.tone(f,t+i*.1,.25,'square',.11)); this.noise(t+.3,.8,.2,'bandpass',2500,.7,true); },
   buzzer(){ if(!this.ok())return; const t=this.ctx.currentTime;      // 「ブッブー」
@@ -467,12 +456,6 @@ function frame(now){
 const cap=$('caption'), machine=$('machine'), btn=$('drawBtn');
 function setCaption(t,cls=''){ cap.className='caption '+cls; cap.textContent=t; }
 
-const cutin=$('cutin');
-function showCutin(){
-  const T=['激アツ！！','チャンス！','キタキタキタ！','予感…！','熱い！！'];
-  cutin.textContent=T[rnd(T.length)]; cutin.classList.remove('go'); void cutin.offsetWidth; cutin.classList.add('go');
-  Snd.cutin();
-}
 function draw(){
   if(spinning) return;
   const p=pool(); if(!p.length) return;
@@ -494,27 +477,41 @@ function draw(){
   const prog=total<=S.fakeFrom?1:Math.min(1,Math.max(0,(idx-S.fakeFrom)/(total-S.fakeFrom)));
   const rv=()=>{ const r=rnd(100); return r<20?'restart':r<38?'back':r<56?'crawl':r<70?'fast':r<85?'bounce':'wobble'; };
   const NORM=['normal','normal'];
-  const plan=(()=>{
-    if(!active) return {kind:'normal',v:NORM};
-    if(FORCE){
-      if(FORCE==='nudge') return {kind:'nudge',v:['park','normal']};
-      if(['together','fakewin'].includes(FORCE)) return {kind:FORCE,v:NORM};
-      if(['dim','cutin'].includes(FORCE)) return {kind:'normal',v:NORM};
-      return {kind:'reel',v:[FORCE,FORCE]};                                  // テスト用
+  const roll=()=>{
+    const N={kind:'normal',v:NORM};
+    if(!active) return {plan:N,dim:false};
+    if(FORCE){                                                                // テスト用
+      if(FORCE==='nudge') return {plan:{kind:'nudge',v:['park','normal']},dim:false};
+      if(['together','fakewin'].includes(FORCE)) return {plan:{kind:FORCE,v:NORM},dim:false};
+      if(FORCE==='dim') return {plan:N,dim:true};
+      return {plan:{kind:'reel',v:[FORCE,FORCE]},dim:false};
     }
-    if(rnd(1000)>=(.25+.6*prog)*1000) return {kind:'normal',v:NORM};          // 発生率 25% → 85%
-    const r=rnd(100);
-    if(r<22) return {kind:'reel',v:[rv(),'normal']};         // 1桁目だけ
-    if(r<36) return {kind:'reel',v:['normal',rv()]};         // 2桁目だけ
-    if(r<46) return {kind:'reel',v:[rv(),rv()]};             // 両方
-    if(r<64) return {kind:'together',v:NORM};                // 同時に止まる
-    if(r<88) return {kind:'nudge',v:['park','normal']};      // 2桁目が止まると同時に1桁目が1つ動く
-    return prog>=.35?{kind:'fakewin',v:NORM}:{kind:'together',v:NORM};   // フェイク当選（中盤以降）
-  })();
-  // 画面演出（当選結果とは無関係の飾り）：暗転・カットイン
-  const useDim=active&&(FORCE==='dim'||(!FORCE&&rnd(100)<10+25*prog));
-  const useCut=active&&(FORCE==='cutin'||(!FORCE&&rnd(100)<12+28*prog));
-  if(useCut) setTimeout(()=>{ if(spinning) showCutin(); },lastAt*(.12+rnd(25)/100));
+    let plan=N;
+    if(rnd(1000)<(.25+.6*prog)*1000){                                         // 発生率 25% → 85%
+      const r=rnd(100);
+      plan = r<22 ? {kind:'reel',v:[rv(),'normal']}          // 1桁目だけ
+           : r<36 ? {kind:'reel',v:['normal',rv()]}          // 2桁目だけ
+           : r<46 ? {kind:'reel',v:[rv(),rv()]}              // 両方
+           : r<64 ? {kind:'together',v:NORM}                 // 同時に止まる
+           : r<88 ? {kind:'nudge',v:['park','normal']}       // 2桁目が止まると同時に1桁目が動く
+           : prog>=.35 ? {kind:'fakewin',v:NORM} : {kind:'together',v:NORM};   // フェイク当選（中盤以降）
+    }
+    return {plan,dim:rnd(100)<10+25*prog};
+  };
+  // 使われている演出の名前の集合（前回と重なったら引き直す）
+  const fxOf=({plan,dim})=>{
+    const f=new Set(plan.v.filter(x=>x!=='normal'&&x!=='park'));
+    if(plan.kind!=='normal'&&plan.kind!=='reel') f.add(plan.kind);
+    if(dim) f.add('dim');
+    return f;
+  };
+  let R=roll();
+  if(!FORCE){
+    for(let k=0;k<30&&[...fxOf(R)].some(x=>lastFx.has(x));k++) R=roll();
+    if([...fxOf(R)].some(x=>lastFx.has(x))) R={plan:{kind:'normal',v:NORM},dim:false};   // どうしても重なるなら演出なし
+  }
+  lastFx=fxOf(R);
+  const plan=R.plan, useDim=R.dim;
 
   // フェイク当選用の「ウソの番号」
   let fk=n;
@@ -641,7 +638,7 @@ addEventListener('keydown',e=>{
 });
 
 load(); init(); fitBar(); requestAnimationFrame(frame);
-window.__lottery={force:v=>{FORCE=v;},forceN:v=>{FORCEN=v;},draw,state:()=>S};
+window.__lottery={lastFx:()=>[...lastFx],force:v=>{FORCE=v;},forceN:v=>{FORCEN=v;},draw,state:()=>S};
 })();
 </script>
 </body>
