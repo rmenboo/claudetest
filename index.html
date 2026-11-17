@@ -275,7 +275,7 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
 <header id="bar">
   <h1>🎊 抽選スロット</h1>
   <label>タイトル <input id="inTitle" type="text"></label>
-  <label title="参加者CSV：1列目＝氏名、2列目＝所属など、3列目＝区分（2列目以降は省略可）">参加者CSV <input id="inPeople" type="file" accept=".csv,.txt,text/csv"></label><span id="peopleInfo"></span>
+  <label title="参加者CSV：1列目＝氏名、2列目＝区分（省略可）">参加者CSV <input id="inPeople" type="file" accept=".csv,.txt,text/csv"></label><span id="peopleInfo"></span>
   <label title="景品CSV：1列目＝景品名、2列目＝数量（省略時は1個）、3列目＝区分（「大当たり」や★を書くと当選表示が変わります。空欄は通常）">景品CSV <input id="inPrize" type="file" accept=".csv,.txt,text/csv"></label><span id="prizeInfo"></span>
   <label title="演出効果は3回目の抽選から始まります。その回での確率 → 最後の抽選での確率（0〜100%）。間は直線的に上がります。0にすると演出なし">演出確率 <input id="inFx0" type="number" min="0" max="100" step="5" value="55" style="width:4.5em">% → <input id="inFx1" type="number" min="0" max="100" step="5" value="95" style="width:4.5em">%</label>
   <label title="スタートから止まるまでの基本時間。実際は毎回ランダムで約0.5〜1.6倍になります">基本時間 <input id="inBase" type="number" min="4" max="30" step="1" value="8">秒</label>
@@ -344,7 +344,8 @@ const $ = id => document.getElementById(id);
 const STORE = 'nenkai-lottery-v1';
 const SPIN_SPEED = 14;            // リールの回転速度（項目/秒）
 const FX_FROM = 3;                // 演出効果が始まる抽選回（固定）
-const VIP_WEIGHT = 10;            // 優先枠（参加者CSV 3列目で指定）の当選しやすさ。他の人を1とした重み
+const VIP_FROM = 5;               // 優先枠の人が当たり得る最初の抽選回（それより前は当たらない）
+const VIP_WEIGHT = 10;            // VIP_FROM 回目以降の、優先枠の当選しやすさ（他の人を1とした重み）
 const THEME_EVERY = 5;            // デザイン自動切替の間隔（抽選回数）
 const LAST_EXTRA_SEC = 5;         // 最後の景品の抽選だけ、当選者スロットの回転時間に足す秒数（設定に関わらず固定。景品スロットは延長しない）
 
@@ -357,11 +358,11 @@ const THEMES=[
   {id:'pop',    name:'⑤ ポップ（お祭り）',    confetti:['#ff3d7f','#ffb23d','#ffe93d','#4fd16b','#3db8ff','#a46bff']}
 ];
 // S：設定と履歴（localStorage に保存）
-//   people：参加者 [{name, dept, vip}] / prizes：景品 [{name, qty, big}]
+//   people：参加者 [{name, vip}] / prizes：景品 [{name, qty, big}]
 //   ※抽選回数＝景品の総数。景品は参加者数以下を前提にしている
 //   sound・bgm：音とBGMのON/OFF（再読み込みしても保つ）
 //   fx0・fx1：演出確率（演出効果が始まる回・最後の抽選） / autoTheme：5回ごとにデザインを自動で切り替えるか
-//   drawn：当選履歴 [{n, who, dept, prize, at}]  n＝参加者の通し番号 / at＝抽選した時刻
+//   drawn：当選履歴 [{n, who, prize, at}]  n＝参加者の通し番号 / at＝抽選した時刻
 let S = { people:[], prizes:[], fx0:55, fx1:95, sound:true, bgm:true, autoTheme:true, theme:'gold', title:'令和8年度収穫祭 大抽選会', base:8, drawn:[] };
 let lastFx = new Set();                         // 直前の抽選で使った演出（同じ演出の連続を避ける）
 let FORCE = null, FORCEN = null, FORCEP = null;   // テスト用：演出・当選者・景品を固定する（通常は null）
@@ -708,8 +709,19 @@ function drawProgress(){
 }
 const rv=()=>{ const r=rnd(100); return r<20?'restart':r<38?'back':r<56?'crawl':r<70?'fast':r<85?'bounce':'wobble'; };
 
-// 当選者を選ぶ（優先枠の人は VIP_WEIGHT 倍の重み）。名前スロットの見た目や画面表示は、優先枠の有無に関係なく同じ
+// 当選者を選ぶ。優先枠（参加者CSVで指定）の人は、
+//   ・VIP_FROM 回目より前は当たらない（序盤で当たると不自然なため）
+//   ・VIP_FROM 回目以降は VIP_WEIGHT 倍の重みで当たりやすい
+//   ・残りの抽選回数が、まだ当たっていない優先枠の人数以下になったら、その人たちの中から必ず選ぶ（取りこぼし防止）
+// 名前スロットの見た目や画面表示は、優先枠の有無に関係なく同じ
 function pickWinner(p){
+  const pick=a=>a[rnd(a.length)];
+  const vips=p.filter(i=>S.people[i].vip), others=p.filter(i=>!S.people[i].vip);
+  if(vips.length){
+    const idx=S.drawn.length+1, left=prizeUnits().length;      // idx：今回が何回目か / left：今回を含む残りの抽選回数
+    if(vips.length>=left||!others.length) return pick(vips);
+    if(idx<VIP_FROM) return pick(others);
+  }
   const w=p.map(i=>S.people[i].vip?VIP_WEIGHT:1);
   let r=rnd(w.reduce((a,x)=>a+x,0));
   for(let k=0;k<p.length;k++){ r-=w[k]; if(r<0) return p[k]; }
@@ -806,7 +818,7 @@ function prizeLeft(){            // 景品ごとの残り数
 function prizeUnits(){ const u=[]; prizeLeft().forEach(x=>{ for(let i=0;i<x.left;i++) u.push(x.name); }); return u; }
 function celebrateSmall(){ const W=innerWidth,H=innerHeight; burst(W/2,H*.4,90,-Math.PI/2,Math.PI*1.6,20); rain(40); }
 const winLabel = n => `${S.people[n].name} さん`;
-function entryFor(n,prize){ const x=S.people[n]; return {n,who:x.name,dept:x.dept,prize,at:Date.now()}; }   // at：抽選した時刻
+function entryFor(n,prize){ const x=S.people[n]; return {n,who:x.name,prize,at:Date.now()}; }   // at：抽選した時刻
 
 // 当選者のあとに景品を抽選する
 function prizeStage(n){
@@ -903,7 +915,6 @@ function renderHist(){
     li.innerHTML='<span class="num name"></span><span class="lbl"></span>';
     li.querySelector('.num').textContent=d.who;
     li.querySelector('.lbl').textContent=`${isBig(d.prize)?'🌾':'🎁'} ${d.prize}`;
-    if(d.dept) li.title=d.dept;
     ul.appendChild(li);
   }
 }
@@ -931,7 +942,7 @@ function buildResultHtml(){
   const left=prizeLeft(), notWon=pool().map(i=>S.people[i]);
   const byPrize=S.prizes.map(x=>({...x,winners:S.drawn.filter(d=>d.prize===x.name)}));
   const row=(cells)=>'<tr>'+cells.map(c=>`<td>${c}</td>`).join('')+'</tr>';
-  const rows=S.drawn.map((d,i)=>row([i+1,esc(d.who),esc(d.dept),`${isBig(d.prize)?'🌾 ':''}${esc(d.prize)}`,d.at?fmt(d.at):''])).join('');
+  const rows=S.drawn.map((d,i)=>row([i+1,esc(d.who),`${isBig(d.prize)?'🌾 ':''}${esc(d.prize)}`,d.at?fmt(d.at):''])).join('');
   const prizeRows=byPrize.map(x=>row([esc(x.name)+(x.big?'（大当たり）':''),x.qty,x.winners.length,x.winners.map(w=>esc(w.who)).join('、')||'―'])).join('');
   const unused=left.filter(x=>x.left>0).map(x=>`${esc(x.name)} ×${x.left}`);
   return `<!DOCTYPE html>
@@ -954,11 +965,11 @@ th{background:#f0ece4}tr:nth-child(even) td{background:#fafafa}
 <div>景品 <b>${S.prizes.reduce((a,x)=>a+x.qty,0)}</b> 個（配布 <b>${S.drawn.length}</b> 個）</div>
 </div>
 <h2>抽選結果（抽選順）</h2>
-<table><thead><tr><th>No.</th><th>氏名</th><th>所属</th><th>景品</th><th>抽選時刻</th></tr></thead><tbody>${rows||'<tr><td colspan="5">まだ抽選していません</td></tr>'}</tbody></table>
+<table><thead><tr><th>No.</th><th>氏名</th><th>景品</th><th>抽選時刻</th></tr></thead><tbody>${rows||'<tr><td colspan="4">まだ抽選していません</td></tr>'}</tbody></table>
 <h2>景品別の当選者</h2>
 <table><thead><tr><th>景品</th><th>数量</th><th>当選</th><th>当選者</th></tr></thead><tbody>${prizeRows}</tbody></table>
 <h2>当選しなかった参加者（${notWon.length}名）</h2>
-<p>${notWon.length?notWon.map(x=>esc(x.name)+(x.dept?`（${esc(x.dept)}）`:'')).join('、'):'なし'}</p>
+<p>${notWon.length?notWon.map(x=>esc(x.name)).join('、'):'なし'}</p>
 <h2>配布されなかった景品</h2>
 <p>${unused.length?unused.join('、'):'なし'}</p>
 </body></html>`;
@@ -1024,12 +1035,12 @@ function parsePrizes(text){
   });
   return [...map].map(([name,o])=>({name,qty:o.qty,big:o.big}));
 }
-// 参加者CSVの3列目：下記の値のときだけ優先枠（誤指定を防ぐため、決まった値のみ有効）。画面には一切表示しない
+// 参加者CSVの2列目（旧形式の3列目も可）：下記の値のときだけ優先枠（誤指定を防ぐため、決まった値のみ有効）。画面には一切表示しない
 const isPriorityMark = v => v!==undefined&&/^(vip|ｖｉｐ|★|☆|○|◯|〇|1|yes|y|true|はい|招待|招待客|来賓|ゲスト)$/i.test(toHalf(v));
 function parsePeople(text){
   const rows=parseCSV(text).map(r=>r.map(x=>x.trim())).filter(r=>r[0]);
   if(rows.length&&/^(氏名|名前|参加者名?|社員名|name)$/i.test(rows[0][0])) rows.shift();   // 見出し行は読み飛ばす
-  return rows.map(r=>({name:r[0],dept:r[1]||'',vip:isPriorityMark(r[2])}));
+  return rows.map(r=>({name:r[0],vip:isPriorityMark(r[1])||isPriorityMark(r[2])}));
 }
 async function readCsvFile(f){            // UTF-8／Shift_JIS（ExcelのCSV）どちらも読む
   const buf=await f.arrayBuffer();
@@ -1041,7 +1052,7 @@ async function loadCsv(f,kind){
   const text=await readCsvFile(f);
   let list=kind==='people'?parsePeople(text):parsePrizes(text);
   if(!list.length){
-    alert(kind==='people'?'参加者を読み取れませんでした。\n1列目＝氏名、2列目＝所属など（省略可）のCSVにしてください。'
+    alert(kind==='people'?'参加者を読み取れませんでした。\n1列目＝氏名のCSVにしてください。'
                          :'景品を読み取れませんでした。\n1列目＝景品名、2列目＝数量（省略可）、3列目＝区分（省略可）のCSVにしてください。');
     return;
   }
@@ -1102,7 +1113,7 @@ load(); applyTheme(S.theme); setSound(S.sound); setBgm(S.bgm); init();
 const unlock=()=>{ Snd.init(); BGM.start(); removeEventListener('pointerdown',unlock); removeEventListener('keydown',unlock); };
 addEventListener('pointerdown',unlock); addEventListener('keydown',unlock); requestAnimationFrame(frame);
 /* テスト用の公開口（画面操作には不要） */
-window.__lottery={pick:pickWinner,pool,parsePeople,parsePrizes,isBig,prizeUnits,lastFx:()=>[...lastFx],bgm:()=>({mode:BGM.mode,running:!!BGM.timer}),
+window.__lottery={pick:pickWinner,pool,entryFor,parsePeople,parsePrizes,isBig,prizeUnits,lastFx:()=>[...lastFx],bgm:()=>({mode:BGM.mode,running:!!BGM.timer}),
   force:v=>{FORCE=v;},forceN:v=>{FORCEN=v;},forceP:v=>{FORCEP=v;},draw,state:()=>S};
 })();
 </script>
