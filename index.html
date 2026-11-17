@@ -187,7 +187,7 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
 'use strict';
 const $ = id => document.getElementById(id);
 const STORE = 'nenkai-lottery-v1';
-const SPIN_SPEED = 26;            // リールの回転速度（桁/秒）
+const SPIN_SPEED = 14;            // リールの回転速度（桁/秒）
 
 /* ============ 状態 ============ */
 let S = { title:'令和8年度収穫祭 大抽選会', start:1, end:30, label:'', base:8, drawn:[] };   // drawn: [{n,label,absent}]
@@ -285,11 +285,12 @@ class Reel{
     for(let k=0;k<20;k++){ const c=document.createElement('div'); c.className='cell'; c.textContent=k%10; this.strip.appendChild(c); }
     el.appendChild(this.strip); this.pos=0; this.mode='idle'; this.lastFloor=0; this.render(0);
   }
-  set(d){ this.pos=d; this.mode='idle'; this.render(0); }
+  set(d){ this.pos=(10-d)%10; this.mode='idle'; this.render(0); }
   spin(){ this.mode='spin'; }
   stop(d,dur,cb){
     const start=this.pos, dist=Math.ceil(SPIN_SPEED*dur/3), raw=start+dist;
-    this.start=start; this.end=Math.ceil((raw-d)/10)*10+d; this.dur=dur; this.cb=cb;
+    this.start=start; this.end=Math.ceil((raw+d)/10)*10-d;   // 表示桁 = (-pos) mod 10 なので pos ≡ -d
+    this.dur=dur; this.cb=cb;
     this.t0=performance.now(); this.mode='stop';
   }
   update(now,dt){
@@ -305,7 +306,8 @@ class Reel{
     this.render(blur);
   }
   render(blur){
-    this.strip.style.transform=`translateY(${-(this.pos%10)/20*100}%)`;
+    const idx=((-this.pos)%10+10)%10;      // pos が増えるほど数字は上→下へ流れる
+    this.strip.style.transform=`translateY(${-idx/20*100}%)`;
     this.strip.style.filter=blur>.3?`blur(${blur.toFixed(1)}px)`:'';
   }
 }
