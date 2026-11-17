@@ -282,8 +282,7 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
   <label title="ひっかけ演出は、この回数目の抽選から起こり始め、最後の抽選（クジ番号の総数）に向けて少しずつ起こりやすくなります">ひっかけ <input id="inFake" type="number" min="1" max="99" step="1" value="6">回目〜</label>
   <label title="スタートから止まるまでの基本時間。実際は毎回ランダムで約0.5〜1.6倍になります">基本時間 <input id="inBase" type="number" min="4" max="30" step="1" value="8">秒</label>
   <label>デザイン <select id="selTheme"></select></label>
-  <label title="1列目＝景品名、2列目＝数量（省略時は1個）。設定すると、当選番号に続いて景品も抽選します">景品CSV <input id="inCsv" type="file" accept=".csv,.txt,text/csv"></label>
-  <label title="景品名にこの語を含む景品が出たとき、特別演出（複数はカンマ区切り）。CSVの3列目に★を付けても指定できます">大当たり景品 <input id="inBig" type="text" placeholder="例：米" style="width:6em"></label>
+  <label title="1列目＝景品名、2列目＝数量（省略時は1個）、3列目＝区分（「大当たり」や★を書くと特別演出。空欄は通常）。設定すると、当選番号に続いて景品も抽選します">景品CSV <input id="inCsv" type="file" accept=".csv,.txt,text/csv"></label>
   <button id="btnPrizeClear" title="景品の設定を解除（番号だけの抽選に戻ります）">景品クリア</button><span id="prizeInfo"></span>
   <label>賞の名前 <input id="inLabel" type="text" placeholder="例：豪華景品"></label>
   <button id="btnApply" title="番号の範囲を反映（抽選履歴はリセット）">設定を反映</button>
@@ -337,7 +336,7 @@ const THEMES=[
   {id:'neon',   name:'④ ネオン',              confetti:['#35f2ff','#ff2bd6','#7a0bff','#b6ff3a','#ffffff','#ffe93d']},
   {id:'pop',    name:'⑤ ポップ（お祭り）',    confetti:['#ff3d7f','#ffb23d','#ffe93d','#4fd16b','#3db8ff','#a46bff']}
 ];
-let S = { bgm:true, speak:false, bigWord:'米', prizes:[], theme:'gold', title:'令和8年度収穫祭 大抽選会', start:1, end:30, label:'', base:8, fakeFrom:6, drawn:[] };   // drawn: [{n,label,absent}]
+let S = { bgm:true, speak:false, prizes:[], theme:'gold', title:'令和8年度収穫祭 大抽選会', start:1, end:30, label:'', base:8, fakeFrom:6, drawn:[] };   // drawn: [{n,label,absent}]
 let FORCE = null, FORCEN = null, lastFx = new Set();   // lastFx：直前の抽選で使った演出
 let idleOn = false, idleTimer = null, bgmTimer = null, lastGlitter = 0, FORCEP = null;
 let width = 2, reels = [], spinning = false, rolling = false, soundOn = true, prizeReel = null;
@@ -814,11 +813,10 @@ function prizeStage(n){
   },1900);
 }
 /* ---- 大当たり・拍手・読み上げ ---- */
-function bigWords(){ return (S.bigWord||'').split(/[,、，]/).map(x=>x.trim()).filter(Boolean); }
 function isBig(name){
   if(!name) return false;
   const pr=S.prizes.find(x=>x.name===name);
-  return !!(pr&&pr.big)||bigWords().some(w=>name.includes(w));
+  return !!(pr&&pr.big);                       // 大当たりかどうかはCSVの3列目（区分）だけで決まる
 }
 function showClaps(ms,text){
   const box=$('claps'); box.innerHTML='';
@@ -908,7 +906,7 @@ function init(){
   const lastD=S.drawn[S.drawn.length-1];
   if(lastD){ showNumber(lastD.n); machine.classList.remove('idle'); setCaption(`前回の当選：${pad(lastD.n)} 番`); }
   else { showNumber(S.start); machine.classList.add('idle'); setCaption('ボタンを押して抽選スタート！'); startIdle(); }
-  $('prize').textContent=S.label; $('inBig').value=S.bigWord;
+  $('prize').textContent=S.label;
 }
 function applyTheme(id){
   const t=THEMES.find(x=>x.id===id)||THEMES[0];
@@ -940,7 +938,7 @@ function parsePrizes(text){
   rows.forEach(r=>{
     const q=r[1]!==undefined&&r[1]!==''?toHalf(r[1]):'1';
     const qty=/^\d+$/.test(q)?Math.min(999,parseInt(q,10)):1;
-    const mark=r[2]!==undefined&&r[2]!==''&&!/^(0|×|✕|no|いいえ|なし|-|－)$/i.test(toHalf(r[2]));   // 3列目に★など＝大当たり
+    const mark=r[2]!==undefined&&r[2]!==''&&!/^(0|×|✕|no|いいえ|なし|-|－|通常|一般|普通)$/i.test(toHalf(r[2]));   // 3列目（区分）に何か書いてあれば大当たり。空欄・通常などは対象外
     if(qty>0){ const o=map.get(r[0])||{qty:0,big:false}; o.qty+=qty; o.big=o.big||mark; map.set(r[0],o); }
   });
   return [...map].map(([name,o])=>({name,qty:o.qty,big:o.big}));
@@ -975,7 +973,6 @@ $('inCsv').onchange=async e=>{ await loadPrizeFile(e.target.files[0]); e.target.
 $('btnPrizeClear').onclick=()=>{ if(spinning||!S.prizes.length)return; if(confirm('景品の設定を解除します（番号だけの抽選に戻ります）。よろしいですか？')){ S.prizes=[]; save(); init(); } };
 $('btnBgm').onclick=()=>setBgm(!S.bgm);
 $('btnSpeak').onclick=()=>setSpeak(!S.speak);
-$('inBig').oninput=e=>{ S.bigWord=e.target.value; save(); renderHist(); };
 $('btnSound').onclick=()=>setSound(!soundOn);
 $('btnFull').onclick=toggleFull;
 $('btnHide').onclick=toggleBar; $('showBar').onclick=toggleBar;
