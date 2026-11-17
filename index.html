@@ -223,6 +223,15 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
 .setup button.done{filter:saturate(.35) brightness(.85)}
 body.loaded .setup{display:none}
 body:not(.loaded) #drawBtn,body:not(.loaded) .remain{display:none}
+/* 景品がラスト1個のときの演出：開始ボタンの色替えと、横切る「LAST ONE」の帯 */
+.draw.last{background:linear-gradient(#ffe27a,#f08a10);color:#3a1200;box-shadow:0 .8vh 0 #8a4a00,0 1.5vh 3vh rgba(0,0,0,.5)}
+#lastBanner{position:fixed;left:0;right:0;top:14vh;height:15vh;z-index:18;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:linear-gradient(90deg,transparent,rgba(232,38,90,.93) 12%,rgba(255,140,30,.93) 50%,rgba(232,38,90,.93) 88%,transparent);
+  color:#fff;font-weight:900;white-space:nowrap;text-shadow:0 0 1.5vh #ffd54a,.4vh .4vh 0 rgba(90,10,30,.7);transform:translateX(-110%)}
+#lastBanner .en{font-size:7vh;letter-spacing:.28em;line-height:1.1}
+#lastBanner .jp{font-size:4.2vh;letter-spacing:.1em}
+#lastBanner.go{animation:lastIn 2.8s cubic-bezier(.2,.8,.2,1)}
+@keyframes lastIn{0%{transform:translateX(-110%)}16%,80%{transform:translateX(0)}100%{transform:translateX(110%)}}
 .resultsMain{display:none}
 body.finished .resultsMain{display:block}   /* 抽選がすべて終わったら「結果表示」ボタンを表示 */
 /* 結果表示画面：誰に何が当たったかだけを一覧で見せる */
@@ -320,6 +329,7 @@ body.dim .machine{box-shadow:0 0 0 .6vmin var(--frame-edge),0 0 14vh 5vh var(--d
 <canvas id="fx"></canvas>
 <div id="flash"></div>
 <div id="claps"></div>
+<div id="lastBanner"><div class="en">🔥 LAST ONE 🔥</div><div class="jp">景品はラスト1個！　最後の抽選です</div></div>
 
 <script>
 /*
@@ -429,6 +439,10 @@ const Snd = {
     const n=Math.floor(dur*30);
     for(let i=0;i<n;i++){ const k=i/n; if(Math.random()<1-k*.65) this.noise(t+k*dur+Math.random()*.03,.03+Math.random()*.03,.11*(1-k*.6)+.02,'bandpass',R(1500,4500),1.2); }
     this.noise(t,dur,.1,'bandpass',1400,.4,true); },
+  lastOne(){ if(!this.ok())return; const t=this.ctx.currentTime;          // 「最後の抽選です」：加速する太鼓＋ジャーン
+    for(let i=0;i<14;i++) this.taiko(t+i*.07,.3+i*.04);
+    this.noise(t+.95,.6,.35,'highpass',5000);
+    [392,493.9,587.3].forEach(f=>this.tone(f,t+1,1.1,'sawtooth',.1)); this.taiko(t+1,1); },
   numhit(){ if(!this.ok())return; const t=this.ctx.currentTime;          // 当選者が決まった「ジャン！」
     this.taiko(t,.9); [523.25,659.25,783.99].forEach(f=>this.tone(f,t,.7,'sawtooth',.1)); this.noise(t,.9,.25,'highpass',5000); },
   fake(){ if(!this.ok())return; const t=this.ctx.currentTime;     // 「ピロッ！」動き出し予告
@@ -689,9 +703,13 @@ function drawProgress(){
 }
 const rv=()=>{ const r=rnd(100); return r<20?'restart':r<38?'back':r<56?'crawl':r<70?'fast':r<85?'bounce':'wobble'; };
 
+const isLastPrize = () => prizeUnits().length===1;                  // 景品が残り1個か
+const idleCaption = () => isLastPrize()?'🔥 ラスト1個！最後の抽選です':'ボタンを押して抽選スタート！';
+function showLastBanner(){ const b=$('lastBanner'); b.classList.remove('go'); void b.offsetWidth; b.classList.add('go'); }
 function draw(){
   if(spinning||!isReady()) return;
   const p=pool(); if(!p.length||!prizeUnits().length) return;
+  const lastOne=isLastPrize();                       // 最後の1個の抽選か
   Snd.init(); BGM.start(); stopIdle(); clearTimeout(bgmTimer); clearTimeout(winTimer); BGM.set('spin');
   if(S.autoTheme&&S.drawn.length>0&&S.drawn.length%THEME_EVERY===0) nextTheme();   // 5回ごとにデザインを切り替え（6回目・11回目…の抽選開始時）
   const n=(FORCEN!=null&&p.includes(FORCEN))?FORCEN:p[rnd(p.length)];   // 先に当選者を確定
@@ -707,9 +725,10 @@ function draw(){
   setCaption('回転中…ドキドキ！');
   $('prizeBox').classList.remove('win'); showPrizeIdle('🎁 ？？？');
   Snd.start(); reels[0].spin(); rollStart=performance.now(); nextRoll=0;
+  if(lastOne){ showLastBanner(); Snd.lastOne(); }     // 「LAST ONE」の帯と効果音
 
-  // 止まるまでの時間 = 基本時間 × 0.5〜1.6倍のランダム
-  const T=Math.min(45,Math.max(4,S.base*(0.5+rnd(1101)/1000)));
+  // 止まるまでの時間 = 基本時間 × 0.5〜1.6倍のランダム（最後の1個は少し長めに溜める）
+  const T=Math.min(45,Math.max(4,S.base*(0.5+rnd(1101)/1000)*(lastOne?1.25:1)));
   const D1=Math.min(3.4,T*.5)*1000, stopAt=T*1000-D1;
 
   // ---- 演出：3回目（FX_FROM）以降に発生し、終盤ほど起こりやすくなる ----
@@ -735,6 +754,7 @@ function draw(){
     if([...fxOf(R)].some(x=>lastFx.has(x))) R={v:'normal',fake:false,dim:false};   // どうしても重なるなら演出なし
   }
   lastFx=fxOf(R);
+  if(lastOne&&!FORCE){ R.dim=true; lastFx.add('dim'); }   // 最後の1個は必ず暗転で溜める
 
   // フェイク当選用の「ウソの当選者」
   let fakeTgt=null, fakeText='';
@@ -780,7 +800,9 @@ function entryFor(n,prize){ const x=S.people[n]; return {n,who:x.name,dept:x.dep
 function prizeStage(n){
   rolling=false;
   const units=prizeUnits(), name=(FORCEP&&units.includes(FORCEP))?FORCEP:units[rnd(units.length)];
-  const names=[...new Set(units)], B=stripFrom(names);
+  let names=[...new Set(units)];
+  if(names.length<3) names=S.prizes.map(x=>x.name);     // 残りの種類が少ないときは、全景品を流して見栄えを保つ
+  const B=stripFrom(names);
   const cands=B.map((x,i)=>x===name?i:-1).filter(i=>i>=0), tIdx=cands[rnd(cands.length)];
   // ① 当選者を軽くお祝い
   document.body.classList.remove('dim'); machine.classList.remove('spinning','buzz'); machine.classList.add('win');
@@ -823,7 +845,7 @@ function startIdle(){                  // 待機：残っている人の名前�
   const nm=pool().map(i=>S.people[i].name); if(!nm.length) return;
   setNameReel(stripFrom(nm)).slow();
   idleOn=true; machine.classList.add('idle'); machine.classList.remove('win');
-  setCaption('ボタンを押して抽選スタート！'); showPrizeIdle('🎁 ？？？');
+  setCaption(idleCaption()); showPrizeIdle('🎁 ？？？');
   BGM.set('idle');
 }
 function stopIdle(){ idleOn=false; clearTimeout(idleTimer); }
@@ -837,7 +859,7 @@ function finish(n,prize){
   BGM.set('off'); clearTimeout(bgmTimer);
   Snd.fanfare(); celebrate();                        // 大当たりも演出は通常と同じ（表示のみ変える）
   Snd.applause(5,2);                                 // 拍手
-  showClaps(6000,'パチパチパチパチ！！　おめでとう！！　👏👏👏');
+  showClaps(6000,prizeUnits().length?'パチパチパチパチ！！　おめでとう！！　👏👏👏':'パチパチパチパチ！！　これで全賞品の抽選が終わりました！　ありがとうございました！　👏👏👏');
   const f=$('flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
   winTimer=setTimeout(()=>machine.classList.remove('win'),4500);
   renderHist(); updateBtn();
@@ -856,8 +878,9 @@ function updateBtn(){
   $('btnSetPeople').classList.toggle('done',S.people.length>0); $('btnSetPrize').classList.toggle('done',S.prizes.length>0);
   document.body.classList.toggle('finished',ready&&S.drawn.length>0&&!(left>0&&pu>0));   // 抽選がすべて終わった
   if(!ready) return;
-  $('remain').textContent=`残り ${left} / 全 ${S.people.length} 名　景品残り ${pu} 個`;
-  if(left>0&&pu>0){ btn.disabled=false; btn.classList.add('ready'); btn.textContent=S.drawn.length?'もう一回！':'抽選スタート！'; }
+  $('remain').textContent=`残り ${left} / 全 ${S.people.length} 名　景品残り ${pu} 個`+(pu===1?'（ラスト！）':'');
+  btn.classList.toggle('last',left>0&&pu===1);
+  if(left>0&&pu>0){ btn.disabled=false; btn.classList.add('ready'); btn.textContent=pu===1?'🔥 ラスト抽選スタート！':(S.drawn.length?'もう一回！':'抽選スタート！'); }
   else { btn.disabled=true; btn.classList.remove('ready'); btn.textContent='抽選終了'; }
 }
 function renderHist(){
@@ -949,7 +972,7 @@ function init(){
   const lastD=S.drawn[S.drawn.length-1], lp=[...S.drawn].reverse().find(d=>d.prize);
   showPrizeIdle(lp?lp.prize:'🎁 ？？？');
   if(lastD){
-    setNameReel([lastD.who]).set(0); machine.classList.remove('idle'); setCaption(`前回の当選：${lastD.who} さん`);
+    setNameReel([lastD.who]).set(0); machine.classList.remove('idle'); setCaption(isLastPrize()?idleCaption():`前回の当選：${lastD.who} さん`);
   }else startIdle();                                 // まだ抽選していない：待機アニメ
 }
 function nextTheme(){ const i=THEMES.findIndex(x=>x.id===S.theme); applyTheme(THEMES[(i+1)%THEMES.length].id); }
