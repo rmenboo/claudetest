@@ -150,7 +150,7 @@ main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 22vw;gap
   <h1>🎊 抽選スロット</h1>
   <label>タイトル <input id="inTitle" type="text" value="令和8年度収穫祭 大抽選会"></label>
   <label>クジ番号 <input id="inStart" type="number" min="1" max="99" value="1"> 〜 <input id="inEnd" type="number" min="1" max="99" value="30"></label>
-  <label title="この回数目の抽選から、ひっかけ演出（再始動・逆戻り・じりじり・早止まり）が起こるようになります。1なら最初から">ひっかけ <input id="inFake" type="number" min="1" max="99" step="1" value="6">回目〜</label>
+  <label title="ひっかけ演出は、この回数目の抽選から起こり始め、「最大」の回数目に向けて少しずつ起こりやすくなります（「最大」以降は最高確率）">ひっかけ <input id="inFake" type="number" min="1" max="99" step="1" value="6">回目〜 最大<input id="inFakeMax" type="number" min="1" max="99" step="1" value="10">回目</label>
   <label title="スタートから止まるまでの基本時間。実際は毎回ランダムで約0.5〜1.6倍になります">基本時間 <input id="inBase" type="number" min="4" max="30" step="1" value="8">秒</label>
   <label>賞の名前 <input id="inLabel" type="text" placeholder="例：豪華景品"></label>
   <button id="btnApply" title="番号の範囲を反映（抽選履歴はリセット）">設定を反映</button>
@@ -192,14 +192,15 @@ const STORE = 'nenkai-lottery-v1';
 const SPIN_SPEED = 14;            // リールの回転速度（桁/秒）
 
 /* ============ 状態 ============ */
-let S = { title:'令和8年度収穫祭 大抽選会', start:1, end:30, label:'', base:8, fakeFrom:6, drawn:[] };   // drawn: [{n,label,absent}]
+let S = { title:'令和8年度収穫祭 大抽選会', start:1, end:30, label:'', base:8, fakeFrom:6, fakeMax:10, drawn:[] };   // drawn: [{n,label,absent}]
 let FORCE = null;
 let width = 2, reels = [], spinning = false, soundOn = true;
 
 function load(){
   try{ const o = JSON.parse(localStorage.getItem(STORE)); if(o && o.drawn) S = Object.assign(S,o); }catch(e){}
   S.end = Math.min(99,S.end); S.start = Math.max(1,Math.min(S.start,S.end));   // 00は除外
-  S.fakeFrom = Math.min(99,Math.max(1,parseInt(S.fakeFrom,10)||6)); S.base = Math.min(30,Math.max(4,+S.base||8));
+  S.fakeFrom = Math.min(99,Math.max(1,parseInt(S.fakeFrom,10)||6));
+  S.fakeMax = Math.min(99,Math.max(1,parseInt(S.fakeMax,10)||10)); S.base = Math.min(30,Math.max(4,+S.base||8));
 }
 function save(){ try{ localStorage.setItem(STORE, JSON.stringify(S)); }catch(e){} }
 const pad = n => String(n).padStart(width,'0');
@@ -303,7 +304,7 @@ class Reel{
   stop(d,dur,cb,variant='normal'){
     const start=this.pos, dist=Math.ceil(SPIN_SPEED*dur/3), raw=start+dist;
     const end=Math.ceil((raw+d)/10)*10-d;       // 表示桁 = (-pos) mod 10 なので pos ≡ -d
-    this.end=end; this.cb=cb; this.segs=[]; this.cur=null; this.lastFloor=Math.floor(start);
+    this.end=end; this.cb=cb; this.segs=[]; this.cur=null; this.released=false; this.lastFloor=Math.floor(start);
     const mv=(to,du,ease,o={})=>this.segs.push(Object.assign({type:'move',to,dur:du,ease},o));
     const hold=(du,o={})=>this.segs.push(Object.assign({type:'hold',dur:du},o));
     const soft=()=>Snd.thump(.55);
@@ -324,9 +325,12 @@ class Reel{
         mv(end-k+j-.4,.7+rnd(400)/1000,'sine',j===1?{onStart:()=>setCaption('じり…じり…','suspense')}:{});
         hold(.22+rnd(250)/1000); mv(end-k+j,.3,'inout',{onEnd:()=>Snd.tick()});
       }
+    }else if(variant==='park'){                   // 1つ手前で止まって待機 → release() で1つ動く
+      mv(end-1,dur,'out',{onEnd:soft}); this.segs.push({type:'wait'});
     }else mv(end,dur,'out');                       // normal / fast
     this.mode='stop';
   }
+  release(){ this.released=true; }
   update(now,dt){
     const prev=this.pos;
     if(this.mode==='spin'){ this.pos+=SPIN_SPEED*dt; if(this.pos>1000)this.pos-=1000; }
@@ -335,7 +339,9 @@ class Reel{
         const sg=this.segs.shift();
         if(sg){ this.cur=sg; sg.t0=now; sg.from=this.pos; sg.onStart&&sg.onStart(); }
       }
-      if(this.cur){
+      if(this.cur && this.cur.type==='wait'){
+        if(this.released){ this.cur=null; this.segs.unshift({type:'move',to:this.end,dur:.33,ease:'inout'}); }
+      } else if(this.cur){
         const sg=this.cur, t=Math.min(1,(now-sg.t0)/(sg.dur*1000));
         if(sg.type==='move') this.pos=sg.from+(sg.to-sg.from)*EASE[sg.ease](t);
         if(t>=1){ if(sg.type==='move') this.pos=sg.to; this.cur=null; sg.onEnd&&sg.onEnd(); }
@@ -436,24 +442,35 @@ function draw(){
   // 止まるまでの総時間 = 基本時間 × 0.5〜1.6倍のランダム
   const T=Math.min(45,Math.max(4,S.base*(0.5+rnd(1101)/1000)));
   const D1=Math.min(3.4,T*.5)*1000, lastAt=T*1000-D1, firstAt=lastAt*.5;
-  // パチンコ風の「ひっかけ」演出：桁ごとに一定確率でランダムに発生（毎回ではない）
-  const pick=last=>{
-    if(S.drawn.length+1<S.fakeFrom) return 'normal';   // 設定した回数目より前はひっかけなし
-    if(FORCE) return FORCE;                            // テスト用
-    if(rnd(100)>=(last?25:35)) return 'normal';
-    const r=rnd(100); return r<30?'restart':r<55?'back':r<80?'crawl':'fast';
-  };
+  // パチンコ風の「ひっかけ」演出：開始回数以降に発生し、終盤ほど起こりやすくなる
+  const rv=()=>{ const r=rnd(100); return r<30?'restart':r<55?'back':r<80?'crawl':'fast'; };
+  const plan=(()=>{
+    const idx=S.drawn.length+1, N={kind:'normal',v:['normal','normal']};
+    if(idx<S.fakeFrom) return N;
+    if(FORCE) return ['together','nudge'].includes(FORCE)?{kind:FORCE,v:['normal','normal']}:{kind:'reel',v:[FORCE,FORCE]};  // テスト用
+    const prog=S.fakeMax<=S.fakeFrom?1:Math.min(1,(idx-S.fakeFrom)/(S.fakeMax-S.fakeFrom));
+    if(rnd(1000)>=(.25+.6*prog)*1000) return N;       // 発生率：25% → 85%
+    const r=rnd(100);
+    if(r<26) return {kind:'reel',v:[rv(),'normal']};   // 1桁目だけ
+    if(r<42) return {kind:'reel',v:['normal',rv()]};   // 2桁目だけ
+    if(r<52) return {kind:'reel',v:[rv(),rv()]};       // 両方
+    if(r<76) return {kind:'together',v:['normal','normal']};   // 同時に止まる
+    return {kind:'nudge',v:['park','normal']};         // 2桁目が止まると同時に1桁目が1つ動く
+  })();
   let done=0;
   reels.forEach((r,i)=>{
-    const last=i===reels.length-1, v=pick(last);
+    const last=i===reels.length-1, v=plan.v[i];
     let at=last?lastAt:firstAt, dur=last?D1/1000:Math.min(1.5,lastAt/1000*.6);
+    if(plan.kind==='together'){ at=lastAt; dur=D1/1000; }              // 両桁を同時に減速・停止
     if(v==='fast'){ dur=.55; at=last?Math.max(firstAt+900,lastAt*.55):Math.max(500,firstAt*.35); }
     if(last){                                           // 最後の桁の前に煽り
-      setTimeout(()=>{ setCaption('最後の1桁は…！？','suspense'); Snd.suspense();
+      setTimeout(()=>{ setCaption(plan.kind==='together'?'せーの…！？':'最後の1桁は…！？','suspense'); Snd.suspense();
         setTimeout(()=>Snd.suspense(),520); setTimeout(()=>Snd.suspense(),1040); },Math.max(0,at-1400));
     }
     setTimeout(()=>r.stop(+s[i],dur,()=>{
-      Snd.thump(); done++;
+      Snd.thump();
+      if(last && plan.kind==='nudge') reels[0].release();   // 2桁目が止まった瞬間に1桁目が動く
+      done++;
       if(done===reels.length) reveal(n);
       else if(!last) setCaption(s.slice(0,i+1).padEnd(width,'?').split('').join(' '));
     },v),at);
@@ -499,7 +516,7 @@ function applySettings(force){
 }
 function init(){
   $('inStart').value=S.start; $('inEnd').value=S.end; $('inTitle').value=S.title; $('title').textContent=S.title; document.title=S.title||'抽選会';
-  $('inLabel').value=S.label; $('inBase').value=S.base; $('inFake').value=S.fakeFrom;
+  $('inLabel').value=S.label; $('inBase').value=S.base; $('inFake').value=S.fakeFrom; $('inFakeMax').value=S.fakeMax;
   buildReels(); renderHist(); updateBtn();
   const lastD=S.drawn[S.drawn.length-1];
   if(lastD){ showNumber(lastD.n); machine.classList.remove('idle'); setCaption(`前回の当選：${pad(lastD.n)} 番`); }
@@ -517,6 +534,7 @@ function fitBar(){ document.documentElement.style.setProperty('--barh',document.
 btn.onclick=()=>{ draw(); btn.blur(); };
 $('btnApply').onclick=()=>applySettings(false);
 $('inFake').onchange=e=>{ S.fakeFrom=Math.min(99,Math.max(1,parseInt(e.target.value,10)||1)); e.target.value=S.fakeFrom; save(); };
+$('inFakeMax').onchange=e=>{ S.fakeMax=Math.min(99,Math.max(1,parseInt(e.target.value,10)||10)); e.target.value=S.fakeMax; save(); };
 $('inBase').onchange=e=>{ S.base=Math.min(30,Math.max(4,parseInt(e.target.value,10)||8)); e.target.value=S.base; save(); };
 $('inTitle').oninput=e=>{ S.title=e.target.value; $('title').textContent=S.title; document.title=S.title||'抽選会'; save(); };
 $('inLabel').oninput=e=>{ S.label=e.target.value; save(); if(!spinning) $('prize').textContent=S.label; };
